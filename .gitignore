@@ -4,7 +4,6 @@
 *.class
 *.jar
 *.war
-!gradle/wrapper/gradle-wrapper.jar
 
 # IDE
 .idea/
@@ -16,8 +15,9 @@
 .settings/
 .vscode/
 
-# Gradle
-.gradle/
+# Maven
+pom.xml.tag
+.pom.xml.swp
 
 # Local
 *.log
