@@ -9,4 +9,4 @@ On-device voice assistant (Java): STT, TTS, LLM, intent engine, device control, 
 
 **Optional: install Maven globally** (e.g. for other projects): [Maven – Download](https://maven.apache.org/download.cgi) (binary zip → unzip → add `bin` to PATH), or **choco install maven** if you use Chocolatey. (Maven is not in winget.)
 
-Phase 1: scaffold ✓, test config ✓, core interfaces ✓, API contract (contracts repo) ✓, skeleton gateway ✓. Next: Phase 2 (app scaffold, test + Storybook, mock cube, base screens).
+Phase 1: scaffold ✓, test config ✓, core interfaces ✓, API contract (contracts repo) ✓, skeleton gateway ✓ (`HttpServerGateway`: `/status`, `/config`, `/devices`, `/routines`, `/profiles`, `/logs`, `/backup`, `/restore` per `openapi/cube-app.yaml`). Next: Phase 2 (app scaffold, test + Storybook, mock cube, base screens).
