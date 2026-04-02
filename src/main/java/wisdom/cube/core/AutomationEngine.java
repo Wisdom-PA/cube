@@ -16,7 +16,7 @@ public interface AutomationEngine {
     /**
      * Parsed intent: type, targets, parameters (strings per Plan §4).
      */
-    record Intent(String type, String targets, String parameters) {}
+    record Intent(String type, String targets, String parameters) { }
 
     /**
      * Result of one action: success/failure and optional error.
