@@ -11,7 +11,7 @@ import java.util.UUID;
  */
 public final class BehaviourLogSchema {
 
-    private BehaviourLogSchema() {}
+    private BehaviourLogSchema() { }
 
     /** Chain summary: one row per chain (F8.T1.S1). */
     public record ChainSummary(
@@ -23,7 +23,7 @@ public final class BehaviourLogSchema {
         Instant identifiedAtTs,
         String identifiedProfileId,
         List<PrivacyModeChange> privacyModeChanges
-    ) {}
+    ) { }
 
     /** Privacy mode switch within a chain. */
     public record PrivacyModeChange(
@@ -31,7 +31,7 @@ public final class BehaviourLogSchema {
         String fromMode,
         String toMode,
         String trigger
-    ) {}
+    ) { }
 
     /** Intent entry: user utterance and parsed intent (no audio). */
     public record IntentEntry(
@@ -43,7 +43,7 @@ public final class BehaviourLogSchema {
         String targets,
         String parameters,
         String profileId
-    ) {}
+    ) { }
 
     /** Action entry: what the system did, before/after state, result. */
     public record ActionEntry(
@@ -55,7 +55,7 @@ public final class BehaviourLogSchema {
         String result,
         String errorCode,
         String errorMessage
-    ) {}
+    ) { }
 
     /** Internet call: external request metadata (no PII). */
     public record InternetCallEntry(
@@ -70,5 +70,5 @@ public final class BehaviourLogSchema {
         String result,
         String errorCode,
         String errorMessage
-    ) {}
+    ) { }
 }
