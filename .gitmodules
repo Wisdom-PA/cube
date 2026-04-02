@@ -1,0 +1,3 @@
+[submodule "wisdom-scripts"]
+	path = wisdom-scripts
+	url = ../scripts
