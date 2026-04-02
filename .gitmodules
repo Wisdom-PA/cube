@@ -1,0 +1,3 @@
+[submodule "wisdom-scripts"]
+	path = wisdom-scripts
+	url = https://github.com/Wisdom-PA/scripts.git
