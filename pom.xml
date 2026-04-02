@@ -134,7 +134,7 @@
                 </rule>
                 <rule>
                   <element>PACKAGE</element>
-                  <includes>wisdom.cube.core,wisdom.cube.logging</includes>
+                  <includes>wisdom.cube.core,wisdom.cube.logging,wisdom.cube.gateway</includes>
                   <limits>
                     <limit>
                       <counter>LINE</counter>
