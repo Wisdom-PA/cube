@@ -170,9 +170,7 @@ public final class HttpServerGateway implements ApiGateway {
         }
         drainBody(exchange);
         exchange.sendResponseHeaders(200, 0);
-        try (OutputStream out = exchange.getResponseBody()) {
-            // empty body
-        }
+        exchange.getResponseBody().close();
     }
 
     private static void drainBody(HttpExchange exchange) throws IOException {
