@@ -12,6 +12,8 @@ public final class ConfigBodyParser {
         "\"device_name\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
     static final Pattern PRIVACY_FIELD = Pattern.compile(
         "\"default_privacy_mode\"\\s*:\\s*\"(paranoid|normal)\"");
+    static final Pattern GLOBAL_OFFLINE_FIELD = Pattern.compile(
+        "\"global_offline\"\\s*:\\s*(true|false)");
 
     private ConfigBodyParser() {
     }
@@ -23,10 +25,12 @@ public final class ConfigBodyParser {
         /** Package-private for {@link #applyPatch}; use getters from gateway code. */
         String deviceName;
         String defaultPrivacyMode;
+        boolean globalOffline;
 
         public MutableConfig(String deviceName, String defaultPrivacyMode) {
             this.deviceName = deviceName;
             this.defaultPrivacyMode = defaultPrivacyMode;
+            this.globalOffline = false;
         }
 
         public String getDeviceName() {
@@ -35,6 +39,10 @@ public final class ConfigBodyParser {
 
         public String getDefaultPrivacyMode() {
             return defaultPrivacyMode;
+        }
+
+        public boolean isGlobalOffline() {
+            return globalOffline;
         }
     }
 
@@ -82,6 +90,10 @@ public final class ConfigBodyParser {
         Matcher privacyMatcher = PRIVACY_FIELD.matcher(body);
         if (privacyMatcher.find()) {
             target.defaultPrivacyMode = privacyMatcher.group(1);
+        }
+        Matcher offlineMatcher = GLOBAL_OFFLINE_FIELD.matcher(body);
+        if (offlineMatcher.find()) {
+            target.globalOffline = Boolean.parseBoolean(offlineMatcher.group(1));
         }
     }
 }

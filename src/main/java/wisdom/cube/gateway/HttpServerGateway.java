@@ -8,6 +8,8 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Executor;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -18,10 +20,8 @@ import com.sun.net.httpserver.HttpServer;
  */
 public final class HttpServerGateway implements ApiGateway {
 
-    private static final String DEVICES_JSON = "{\"devices\":["
-        + "{\"id\":\"light-1\",\"name\":\"Living room light\",\"type\":\"light\",\"room\":\"Living room\"},"
-        + "{\"id\":\"light-2\",\"name\":\"Kitchen light\",\"type\":\"light\",\"room\":\"Kitchen\"}"
-        + "]}";
+    private static final Pattern CHAT_MESSAGE_FIELD = Pattern.compile(
+        "\"message\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
 
     private static final String ROUTINES_JSON = "{\"routines\":["
         + "{\"id\":\"r1\",\"name\":\"Evening lights\"},"
@@ -43,6 +43,7 @@ public final class HttpServerGateway implements ApiGateway {
     private final Object configLock = new Object();
     private final ConfigBodyParser.MutableConfig config =
         new ConfigBodyParser.MutableConfig("Mock Cube", "paranoid");
+    private final DeviceFixtureStore deviceStore = new DeviceFixtureStore();
 
     public HttpServerGateway(int port, Executor executor) {
         this.port = port;
@@ -65,6 +66,8 @@ public final class HttpServerGateway implements ApiGateway {
             server.createContext("/logs", this::handleLogs);
             server.createContext("/backup", this::handleBackup);
             server.createContext("/restore", this::handleRestore);
+            server.createContext("/chat", this::handleChat);
+            server.createContext("/internet-activity", this::handleInternetActivity);
             server.start();
         } catch (IOException e) {
             throw new IllegalStateException("Failed to start API gateway on port " + port, e);
@@ -119,11 +122,71 @@ public final class HttpServerGateway implements ApiGateway {
     }
 
     private void handleDevices(HttpExchange exchange) throws IOException {
+        String path = exchange.getRequestURI().getPath();
+        String method = exchange.getRequestMethod();
+        if ("/devices".equals(path) || "/devices/".equals(path)) {
+            if ("GET".equals(method)) {
+                sendJson(exchange, 200, deviceStore.listJson());
+                return;
+            }
+            sendResponse(exchange, 405, "Method Not Allowed");
+            return;
+        }
+        if (!path.startsWith("/devices/")) {
+            sendResponse(exchange, 404, "Not Found");
+            return;
+        }
+        String deviceId = path.substring("/devices/".length());
+        if (deviceId.isEmpty() || deviceId.indexOf('/') >= 0) {
+            sendResponse(exchange, 404, "Not Found");
+            return;
+        }
+        if ("PATCH".equals(method)) {
+            String body = readBody(exchange);
+            String updated = deviceStore.patch(deviceId, body);
+            if (updated == null) {
+                sendJson(exchange, 404, "{\"error\":\"unknown device\"}");
+                return;
+            }
+            sendJson(exchange, 200, updated);
+            return;
+        }
+        sendResponse(exchange, 405, "Method Not Allowed");
+    }
+
+    private void handleChat(HttpExchange exchange) throws IOException {
+        if (!"POST".equals(exchange.getRequestMethod())) {
+            sendResponse(exchange, 405, "Method Not Allowed");
+            return;
+        }
+        String body = readBody(exchange);
+        String message = extractChatMessage(body);
+        if (message == null) {
+            sendJson(exchange, 400, "{\"error\":\"missing or invalid message\"}");
+            return;
+        }
+        String replyText = "On-device (stub): " + message;
+        String json = "{\"reply\":\"" + ConfigBodyParser.jsonEscape(replyText) + "\",\"source\":\"on_device\"}";
+        sendJson(exchange, 200, json);
+    }
+
+    private void handleInternetActivity(HttpExchange exchange) throws IOException {
         if (!"GET".equals(exchange.getRequestMethod())) {
             sendResponse(exchange, 405, "Method Not Allowed");
             return;
         }
-        sendJson(exchange, 200, DEVICES_JSON);
+        sendJson(exchange, 200, "{\"events\":[]}");
+    }
+
+    private static String extractChatMessage(String body) {
+        if (body == null || body.isBlank()) {
+            return null;
+        }
+        Matcher m = CHAT_MESSAGE_FIELD.matcher(body);
+        if (!m.find()) {
+            return null;
+        }
+        return ConfigBodyParser.jsonUnescape(m.group(1));
     }
 
     private void handleRoutines(HttpExchange exchange) throws IOException {
@@ -182,12 +245,13 @@ public final class HttpServerGateway implements ApiGateway {
     }
 
     private String buildStatusJson() {
-        return "{\"version\":\"0.1.0\",\"ready\":true,\"privacy_mode\":\"" + config.defaultPrivacyMode + "\"}";
+        return "{\"version\":\"0.1.0\",\"ready\":true,\"privacy_mode\":\"" + config.defaultPrivacyMode
+            + "\",\"global_offline\":" + config.globalOffline + "}";
     }
 
     private String buildConfigJson() {
         return "{\"device_name\":\"" + ConfigBodyParser.jsonEscape(config.deviceName) + "\",\"default_privacy_mode\":\""
-            + config.defaultPrivacyMode + "\"}";
+            + config.defaultPrivacyMode + "\",\"global_offline\":" + config.globalOffline + "}";
     }
 
     private static String readBody(HttpExchange exchange) throws IOException {

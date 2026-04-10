@@ -1,8 +1,5 @@
 package wisdom.cube.gateway;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -10,15 +7,21 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Executors;
 
+import org.junit.jupiter.api.AfterEach;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
 
 class HttpServerGatewayTest {
 
     private HttpServerGateway gateway;
 
+    /**
+     * Stops the server between tests. Invoked by JUnit 5, not by other code in this class.
+     */
     @AfterEach
+    @SuppressWarnings("unused")
     void tearDown() {
         if (gateway != null) {
             gateway.stop();
@@ -66,6 +69,8 @@ class HttpServerGatewayTest {
         assertTrue(body.contains("\"ready\""));
         assertTrue(body.contains("true"));
         assertTrue(body.contains("paranoid"));
+        assertTrue(body.contains("\"global_offline\""));
+        assertTrue(body.contains("false"));
     }
 
     @Test
@@ -114,7 +119,7 @@ class HttpServerGatewayTest {
         gateway.start();
         int port = gateway.getPort();
         HttpClient client = HttpClient.newHttpClient();
-        for (String path : new String[] {"/devices", "/routines", "/profiles", "/logs"}) {
+        for (String path : new String[] {"/devices", "/routines", "/profiles", "/logs", "/internet-activity"}) {
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://127.0.0.1:" + port + path))
                 .GET()
@@ -123,6 +128,12 @@ class HttpServerGatewayTest {
             assertEquals(200, response.statusCode(), path);
             assertTrue(response.body().startsWith("{"), path);
         }
+        HttpRequest devices = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/devices"))
+            .GET()
+            .build();
+        HttpResponse<String> devRes = client.send(devices, HttpResponse.BodyHandlers.ofString());
+        assertTrue(devRes.body().contains("\"power\""));
     }
 
     @Test
@@ -238,5 +249,69 @@ class HttpServerGatewayTest {
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
         assertEquals(200, response.statusCode());
         assertTrue(response.body().contains("Mock Cube"));
+    }
+
+    @Test
+    void patchDeviceUpdatesState() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest patch = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/devices/light-2"))
+            .method("PATCH", HttpRequest.BodyPublishers.ofString("{\"power\":true,\"brightness\":0.25}"))
+            .header("Content-Type", "application/json")
+            .build();
+        HttpResponse<String> response = client.send(patch, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("\"power\":true"));
+        assertTrue(response.body().contains("0.25"));
+    }
+
+    @Test
+    void patchUnknownDeviceReturns404() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest patch = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/devices/unknown"))
+            .method("PATCH", HttpRequest.BodyPublishers.ofString("{}"))
+            .header("Content-Type", "application/json")
+            .build();
+        HttpResponse<String> response = client.send(patch, HttpResponse.BodyHandlers.ofString());
+        assertEquals(404, response.statusCode());
+    }
+
+    @Test
+    void postChatReturnsReply() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/chat"))
+            .POST(HttpRequest.BodyPublishers.ofString("{\"message\":\"hello\"}"))
+            .header("Content-Type", "application/json")
+            .build();
+        HttpResponse<String> response = client.send(req, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("\"reply\""));
+        assertTrue(response.body().contains("on_device"));
+    }
+
+    @Test
+    void postChatWithoutMessageReturns400() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/chat"))
+            .POST(HttpRequest.BodyPublishers.ofString("{}"))
+            .header("Content-Type", "application/json")
+            .build();
+        HttpResponse<String> response = client.send(req, HttpResponse.BodyHandlers.ofString());
+        assertEquals(400, response.statusCode());
     }
 }
