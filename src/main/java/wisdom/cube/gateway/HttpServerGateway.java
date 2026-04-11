@@ -1,8 +1,5 @@
 package wisdom.cube.gateway;
 
-import wisdom.cube.core.ApiGateway;
-import wisdom.cube.logging.InMemoryBehaviourLogStore;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -14,6 +11,10 @@ import java.util.regex.Pattern;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+
+import wisdom.cube.core.ApiGateway;
+import wisdom.cube.device.InMemoryLightDeviceRegistry;
+import wisdom.cube.logging.InMemoryBehaviourLogStore;
 
 /**
  * Skeleton API gateway: JDK {@link HttpServer} implementing paths from {@code openapi/cube-app.yaml}
@@ -42,7 +43,7 @@ public final class HttpServerGateway implements ApiGateway {
     private final Object configLock = new Object();
     private final ConfigBodyParser.MutableConfig config =
         new ConfigBodyParser.MutableConfig("Mock Cube", "paranoid");
-    private final DeviceFixtureStore deviceStore = new DeviceFixtureStore();
+    private final DeviceFixtureStore deviceStore = defaultDeviceStore();
     private final InMemoryBehaviourLogStore behaviourLog;
 
     public HttpServerGateway(int port, Executor executor) {
@@ -285,5 +286,9 @@ public final class HttpServerGateway implements ApiGateway {
         try (OutputStream out = exchange.getResponseBody()) {
             out.write(bytes);
         }
+    }
+
+    private static DeviceFixtureStore defaultDeviceStore() {
+        return new DeviceFixtureStore(new InMemoryLightDeviceRegistry());
     }
 }

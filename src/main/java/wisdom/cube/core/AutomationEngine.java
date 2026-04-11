@@ -4,7 +4,7 @@ import java.util.Optional;
 
 /**
  * Executes device actions and routines (lights, scenes, etc.).
- * Mocked in unit tests; real implementation in Phase 7.
+ * Mocked in unit tests; {@link wisdom.cube.device.DefaultAutomationEngine} is the in-memory light integration.
  */
 public interface AutomationEngine {
 
