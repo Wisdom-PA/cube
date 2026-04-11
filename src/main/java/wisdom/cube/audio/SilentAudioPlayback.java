@@ -2,6 +2,7 @@ package wisdom.cube.audio;
 
 /**
  * No-op playback for tests and headless CI (F3.T4 stub until Piper is integrated).
+ * Does not retain {@link AudioChunk} bytes; callers may {@link AudioChunk#discardPayload()} after play.
  */
 public final class SilentAudioPlayback implements AudioPlayback {
 
