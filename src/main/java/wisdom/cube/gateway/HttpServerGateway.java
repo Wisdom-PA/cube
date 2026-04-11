@@ -13,7 +13,9 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
 import wisdom.cube.core.ApiGateway;
+import wisdom.cube.device.DeviceDiscoveryService;
 import wisdom.cube.device.InMemoryLightDeviceRegistry;
+import wisdom.cube.device.NoOpDeviceDiscoveryService;
 import wisdom.cube.logging.InMemoryBehaviourLogStore;
 
 /**
@@ -44,6 +46,7 @@ public final class HttpServerGateway implements ApiGateway {
     private final ConfigBodyParser.MutableConfig config =
         new ConfigBodyParser.MutableConfig("Mock Cube", "paranoid");
     private final DeviceFixtureStore deviceStore = defaultDeviceStore();
+    private final DeviceDiscoveryService deviceDiscovery = new NoOpDeviceDiscoveryService();
     private final InMemoryBehaviourLogStore behaviourLog;
 
     public HttpServerGateway(int port, Executor executor) {
@@ -138,6 +141,17 @@ public final class HttpServerGateway implements ApiGateway {
             sendResponse(exchange, 405, "Method Not Allowed");
             return;
         }
+        if ("/devices/discover".equals(path) || "/devices/discover/".equals(path)) {
+            if ("POST".equals(method)) {
+                int added = deviceDiscovery.refreshDiscoveries(deviceStore.registry());
+                String list = deviceStore.listJson();
+                String array = extractJsonArrayAfterKey(list, "devices");
+                sendJson(exchange, 200, "{\"status\":\"complete\",\"added\":" + added + ",\"devices\":" + array + "}");
+                return;
+            }
+            sendResponse(exchange, 405, "Method Not Allowed");
+            return;
+        }
         if (!path.startsWith("/devices/")) {
             sendResponse(exchange, 404, "Not Found");
             return;
@@ -151,7 +165,7 @@ public final class HttpServerGateway implements ApiGateway {
             String body = readBody(exchange);
             String updated = deviceStore.patch(deviceId, body);
             if (updated == null) {
-                sendJson(exchange, 404, "{\"error\":\"unknown device\"}");
+                sendJson(exchange, 404, DeviceApiErrors.deviceNotFoundJson());
                 return;
             }
             behaviourLog.recordDevicePatchFromApp(deviceId, body, updated);
@@ -290,5 +304,31 @@ public final class HttpServerGateway implements ApiGateway {
 
     private static DeviceFixtureStore defaultDeviceStore() {
         return new DeviceFixtureStore(new InMemoryLightDeviceRegistry());
+    }
+
+    /** Extracts the JSON array value for {@code "key": [...] } from a small object string. */
+    static String extractJsonArrayAfterKey(String objectJson, String key) {
+        String needle = "\"" + key + "\":";
+        int i = objectJson.indexOf(needle);
+        if (i < 0) {
+            return "[]";
+        }
+        int bracket = objectJson.indexOf('[', i + needle.length());
+        if (bracket < 0) {
+            return "[]";
+        }
+        int depth = 0;
+        for (int p = bracket; p < objectJson.length(); p++) {
+            char c = objectJson.charAt(p);
+            if (c == '[') {
+                depth++;
+            } else if (c == ']') {
+                depth--;
+                if (depth == 0) {
+                    return objectJson.substring(bracket, p + 1);
+                }
+            }
+        }
+        return "[]";
     }
 }

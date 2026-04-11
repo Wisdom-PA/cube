@@ -9,6 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
+import wisdom.cube.core.AutomationEngine;
+
 class InMemoryBehaviourLogStoreTest {
 
     private static InMemoryBehaviourLogStore emptyStore() {
@@ -100,5 +102,20 @@ class InMemoryBehaviourLogStoreTest {
         store.recordChatFromApp("second", "r2");
         String json = store.toLogQueryJson();
         assertTrue(json.indexOf("first") < json.indexOf("second"));
+    }
+
+    @Test
+    void recordVoiceDeviceAutomationIncludesTargetsParametersAndActionError() {
+        InMemoryBehaviourLogStore store = emptyStore();
+        AutomationEngine.Intent intent = new AutomationEngine.Intent("set_light", "attic", "on");
+        AutomationEngine.ActionResult fail = AutomationEngine.ActionResult.failure("NOT_FOUND", "No light");
+        store.recordVoiceDeviceAutomation("adult-1", "turn on attic", intent, fail, "I could not find a light.");
+        String json = store.toLogQueryJson();
+        assertTrue(json.contains("set_light"));
+        assertTrue(json.contains("attic"));
+        assertTrue(json.contains("\"targets\":\"attic\""));
+        assertTrue(json.contains("\"parameters\":\"on\""));
+        assertTrue(json.contains("NOT_FOUND"));
+        assertTrue(json.contains("\"error_code\":\"NOT_FOUND\""));
     }
 }
