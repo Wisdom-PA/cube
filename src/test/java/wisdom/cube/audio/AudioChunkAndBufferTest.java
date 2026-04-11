@@ -7,6 +7,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AudioChunkAndBufferTest {
@@ -44,5 +45,24 @@ class AudioChunkAndBufferTest {
         byte[] b = {1, 2, 3};
         InMemoryAudioRingBuffer.zeroOut(b);
         assertArrayEquals(new byte[] {0, 0, 0}, b);
+    }
+
+    @Test
+    void discardPayloadZerosAndBlocksData() {
+        AudioChunk c = new AudioChunk(new byte[] {7, 8}, 16000, false);
+        assertArrayEquals(new byte[] {7, 8}, c.data());
+        c.discardPayload();
+        assertEquals(0, c.byteLength());
+        assertFalse(c.hasPayload());
+        assertThrows(IllegalStateException.class, c::data);
+    }
+
+    @Test
+    void closeDiscardsQueuedChunks() {
+        InMemoryAudioRingBuffer buf = new InMemoryAudioRingBuffer();
+        AudioChunk pending = new AudioChunk(new byte[] {3, 3, 3}, 8000, false);
+        buf.push(pending);
+        buf.close();
+        assertFalse(pending.hasPayload());
     }
 }

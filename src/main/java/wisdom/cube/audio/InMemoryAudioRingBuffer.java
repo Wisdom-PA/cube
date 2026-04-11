@@ -31,7 +31,10 @@ public final class InMemoryAudioRingBuffer implements AudioCapture {
     @Override
     public void close() {
         closed = true;
-        queue.clear();
+        AudioChunk c;
+        while ((c = queue.poll()) != null) {
+            c.discardPayload();
+        }
     }
 
     /**
