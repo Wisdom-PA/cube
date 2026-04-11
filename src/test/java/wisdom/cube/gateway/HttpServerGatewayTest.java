@@ -349,6 +349,27 @@ class HttpServerGatewayTest {
             .build();
         HttpResponse<String> response = client.send(patch, HttpResponse.BodyHandlers.ofString());
         assertEquals(404, response.statusCode());
+        assertTrue(response.body().contains("DEVICE_NOT_FOUND"));
+        assertTrue(response.body().contains("Unknown device"));
+    }
+
+    @Test
+    void postDevicesDiscoverReturnsCompletePayload() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/devices/discover"))
+            .POST(HttpRequest.BodyPublishers.noBody())
+            .build();
+        HttpResponse<String> response = client.send(req, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode());
+        String body = response.body();
+        assertTrue(body.contains("\"status\":\"complete\""));
+        assertTrue(body.contains("\"added\":0"));
+        assertTrue(body.contains("\"devices\":["));
+        assertTrue(body.contains("light-1"));
     }
 
     @Test

@@ -1,5 +1,6 @@
 package wisdom.cube.logging;
 
+import wisdom.cube.core.AutomationEngine;
 import wisdom.cube.util.JsonStrings;
 
 import java.time.Instant;
@@ -94,6 +95,56 @@ public final class InMemoryBehaviourLogStore implements BehaviourLogWriter {
     }
 
     /**
+     * Records one closed chain for voice → device automation (no audio; utterance text only).
+     */
+    @Override
+    public void recordVoiceDeviceAutomation(
+        String profileId,
+        String utterance,
+        AutomationEngine.Intent intent,
+        AutomationEngine.ActionResult result,
+        String spokenToUser
+    ) {
+        UUID chainId = UUID.randomUUID();
+        Instant now = Instant.now();
+        String pid = profileId == null ? "unknown" : profileId;
+        String utt = utterance == null ? "" : utterance;
+        String spoken = spokenToUser == null ? "" : spokenToUser;
+        writeChainSummary(new BehaviourLogSchema.ChainSummary(
+            chainId,
+            "cube",
+            now,
+            Optional.of(now),
+            pid,
+            now,
+            pid,
+            List.of()
+        ));
+        writeIntent(new BehaviourLogSchema.IntentEntry(
+            chainId,
+            0,
+            now,
+            utt,
+            intent.type(),
+            intent.targets(),
+            intent.parameters(),
+            pid
+        ));
+        String summary = intent.type() + " " + intent.targets() + " " + intent.parameters()
+            + " → " + (result.success() ? spoken : result.errorMessage());
+        writeAction(new BehaviourLogSchema.ActionEntry(
+            chainId,
+            0,
+            0,
+            now,
+            truncate(summary, 500),
+            result.success() ? "ok" : "error",
+            result.success() ? null : result.errorCode(),
+            result.success() ? null : result.errorMessage()
+        ));
+    }
+
+    /**
      * Records one closed chain for a stub chat reply from {@code POST /chat}.
      */
     public void recordChatFromApp(String userMessage, String replyText) {
@@ -182,6 +233,9 @@ public final class InMemoryBehaviourLogStore implements BehaviourLogWriter {
             sb.append("{\"utterance\":\"").append(JsonStrings.escape(i.utteranceText())).append("\",");
             sb.append("\"intent_index\":").append(i.intentIndex()).append(',');
             sb.append("\"type\":\"").append(JsonStrings.escape(i.type())).append("\",");
+            sb.append("\"targets\":\"").append(JsonStrings.escape(i.targets())).append("\",");
+            sb.append("\"parameters\":\"").append(JsonStrings.escape(i.parameters())).append("\",");
+            sb.append("\"profile_id\":\"").append(JsonStrings.escape(i.profileId())).append("\",");
             sb.append("\"ts\":\"").append(ISO.format(i.ts())).append("\"}");
         }
     }

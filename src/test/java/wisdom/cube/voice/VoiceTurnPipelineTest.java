@@ -10,19 +10,24 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.anyString;
 import org.mockito.Mock;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import wisdom.cube.core.AutomationEngine;
 import wisdom.cube.core.LlmService;
 import wisdom.cube.core.SttService;
 import wisdom.cube.core.TtsService;
+import wisdom.cube.device.DefaultAutomationEngine;
+import wisdom.cube.device.InMemoryLightDeviceRegistry;
 import wisdom.cube.dialogue.DialogueManager;
 import wisdom.cube.intent.IntentClassification;
 import wisdom.cube.intent.IntentClassifier;
 import wisdom.cube.intent.RuleBasedIntentClassifier;
+import wisdom.cube.logging.InMemoryBehaviourLogStore;
 import wisdom.cube.memory.InMemoryMemoryStore;
 
 @ExtendWith(MockitoExtension.class)
@@ -59,6 +64,34 @@ class VoiceTurnPipelineTest {
         return new DefaultPipelineFixture(pipeline, memory, dialogue);
     }
 
+    private VoiceTurnPipeline pipelineWithAutomation(InMemoryLightDeviceRegistry registry) {
+        return new VoiceTurnPipeline(
+            stt,
+            tts,
+            llm,
+            new RuleBasedIntentClassifier(),
+            new DialogueManager(),
+            new InMemoryMemoryStore(),
+            "adult-1",
+            Optional.of(new DefaultAutomationEngine(registry)),
+            Optional.empty()
+        );
+    }
+
+    private VoiceTurnPipeline pipelineWithAutomation(InMemoryLightDeviceRegistry registry, InMemoryBehaviourLogStore log) {
+        return new VoiceTurnPipeline(
+            stt,
+            tts,
+            llm,
+            new RuleBasedIntentClassifier(),
+            new DialogueManager(),
+            new InMemoryMemoryStore(),
+            "adult-1",
+            Optional.of(new DefaultAutomationEngine(registry)),
+            Optional.of(log)
+        );
+    }
+
     @Test
     void runTurnAfterWakeEmptyTranscript() {
         DefaultPipelineFixture f = defaultFixture();
@@ -70,7 +103,7 @@ class VoiceTurnPipelineTest {
     }
 
     @Test
-    void resolvedIntentCallsLlmAndTts() {
+    void resolvedIntentCallsLlmAndTtsWhenNoAutomation() {
         DefaultPipelineFixture f = defaultFixture();
         when(stt.transcribe()).thenReturn(Optional.of("turn on living room light"));
         when(llm.complete(anyString())).thenReturn(Optional.of("Living room light is on."));
@@ -78,7 +111,56 @@ class VoiceTurnPipelineTest {
         assertTrue(r.ok());
         assertEquals("Living room light is on.", r.spokenText().orElseThrow());
         verify(tts).speak("Living room light is on.");
+        verify(llm).complete(anyString());
         assertTrue(f.memory().recall("adult-1", "last_utterance").isPresent());
+    }
+
+    @Test
+    void lightIntentRunsAutomationWithoutLlm() {
+        InMemoryLightDeviceRegistry registry = new InMemoryLightDeviceRegistry();
+        VoiceTurnPipeline p = pipelineWithAutomation(registry);
+        when(stt.transcribe()).thenReturn(Optional.of("turn on living room light"));
+        VoiceTurnResult r = p.runTurnAfterWake();
+        assertTrue(r.ok());
+        assertTrue(registry.get("light-1").orElseThrow().power());
+        verify(llm, never()).complete(anyString());
+        verify(tts).speak("Okay.");
+    }
+
+    @Test
+    void lightIntentWritesBehaviourLogWhenStoreProvided() {
+        InMemoryLightDeviceRegistry registry = new InMemoryLightDeviceRegistry();
+        InMemoryBehaviourLogStore log = new InMemoryBehaviourLogStore();
+        VoiceTurnPipeline p = pipelineWithAutomation(registry, log);
+        VoiceTurnResult r = p.processUtterance("turn off kitchen light", Optional.empty());
+        assertTrue(r.ok());
+        assertFalse(registry.get("light-2").orElseThrow().power());
+        String json = log.toLogQueryJson();
+        assertTrue(json.contains("set_light"));
+        assertTrue(json.contains("kitchen"));
+    }
+
+    @Test
+    void automationFailureSpeaksUserMessage() {
+        IntentClassifier cl = mock(IntentClassifier.class);
+        when(cl.classify(anyString())).thenReturn(
+            new IntentClassification.Resolved(new AutomationEngine.Intent("set_light", "attic", "on")));
+        VoiceTurnPipeline p = new VoiceTurnPipeline(
+            stt,
+            tts,
+            llm,
+            cl,
+            new DialogueManager(),
+            new InMemoryMemoryStore(),
+            "adult-1",
+            Optional.of(new DefaultAutomationEngine(new InMemoryLightDeviceRegistry())),
+            Optional.empty()
+        );
+        VoiceTurnResult r = p.processUtterance("turn on attic light", Optional.empty());
+        assertFalse(r.ok());
+        assertEquals("automation_failed", r.code());
+        verify(tts).speak("I could not find a light in that room.");
+        verify(llm, never()).complete(anyString());
     }
 
     @Test
