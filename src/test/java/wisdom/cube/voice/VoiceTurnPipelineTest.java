@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import org.mockito.Mock;
 import static org.mockito.Mockito.mock;
@@ -220,5 +221,31 @@ class VoiceTurnPipelineTest {
         VoiceTurnResult r = p.processUtterance("a", Optional.of("b"));
         assertFalse(r.ok());
         assertEquals("still_ambiguous", r.code());
+    }
+
+    @Test
+    void automationUnreachableUsesStandardVoiceLine() {
+        AutomationEngine auto = mock(AutomationEngine.class);
+        when(auto.execute(any())).thenReturn(
+            Optional.of(AutomationEngine.ActionResult.failure("UNREACHABLE", "Device unreachable")));
+        IntentClassifier cl = mock(IntentClassifier.class);
+        when(cl.classify(anyString())).thenReturn(
+            new IntentClassification.Resolved(new AutomationEngine.Intent("set_light", "living_room", "on")));
+        VoiceTurnPipeline p = new VoiceTurnPipeline(
+            stt,
+            tts,
+            llm,
+            cl,
+            new DialogueManager(),
+            new InMemoryMemoryStore(),
+            "adult-1",
+            Optional.of(auto),
+            Optional.empty()
+        );
+        when(stt.transcribe()).thenReturn(Optional.of("turn on living room light"));
+        VoiceTurnResult r = p.runTurnAfterWake();
+        assertFalse(r.ok());
+        verify(tts).speak("I could not reach that device right now.");
+        verify(llm, never()).complete(anyString());
     }
 }

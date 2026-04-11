@@ -339,6 +339,25 @@ class HttpServerGatewayTest {
     }
 
     @Test
+    void patchUnreachableDeviceReturns503() throws Exception {
+        InMemoryBehaviourLogStore log = new InMemoryBehaviourLogStore();
+        DeviceFixtureStore ds = new DeviceFixtureStore(new InMemoryLightDeviceRegistry());
+        ((InMemoryLightDeviceRegistry) ds.registry()).setReachable("light-1", false);
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor(), log, ds);
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest patch = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/devices/light-1"))
+            .method("PATCH", HttpRequest.BodyPublishers.ofString("{\"power\":false}"))
+            .header("Content-Type", "application/json")
+            .build();
+        HttpResponse<String> response = client.send(patch, HttpResponse.BodyHandlers.ofString());
+        assertEquals(503, response.statusCode());
+        assertTrue(response.body().contains("DEVICE_UNREACHABLE"));
+    }
+
+    @Test
     void patchUnknownDeviceReturns404() throws Exception {
         gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
         gateway.start();

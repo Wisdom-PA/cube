@@ -81,4 +81,15 @@ class DefaultAutomationEngineTest {
         assertFalse(r.get().success());
         assertEquals("BAD_REQUEST", r.get().errorCode());
     }
+
+    @Test
+    void setLightFailsWhenUnreachable() {
+        InMemoryLightDeviceRegistry r = new InMemoryLightDeviceRegistry();
+        r.setReachable("light-1", false);
+        DefaultAutomationEngine engine = new DefaultAutomationEngine(r);
+        Optional<AutomationEngine.ActionResult> res = engine.execute(
+            new AutomationEngine.Intent("set_light", "living_room", "on"));
+        assertFalse(res.get().success());
+        assertEquals("UNREACHABLE", res.get().errorCode());
+    }
 }

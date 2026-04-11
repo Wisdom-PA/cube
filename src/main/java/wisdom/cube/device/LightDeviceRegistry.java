@@ -24,6 +24,9 @@ public interface LightDeviceRegistry {
     /** Brightness is clamped to {@code [0, 1]}. */
     void setBrightness(String id, double brightness);
 
+    /** Integration / health layer sets whether commands may reach the device (F6.T3). */
+    void setReachable(String id, boolean reachable);
+
     /**
      * First light in the room matching {@code roomSlug} ({@code kitchen} ↔ {@code Kitchen}, etc.).
      */

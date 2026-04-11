@@ -74,7 +74,8 @@ public final class DeviceFixtureStore {
             + "\"type\":\"" + ConfigBodyParser.jsonEscape(e.type()) + "\","
             + "\"room\":\"" + ConfigBodyParser.jsonEscape(e.room()) + "\","
             + "\"power\":" + e.power() + ","
-            + "\"brightness\":" + formatBrightness(e.brightness())
+            + "\"brightness\":" + formatBrightness(e.brightness()) + ","
+            + "\"reachable\":" + e.reachable()
             + "}";
     }
 

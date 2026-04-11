@@ -58,4 +58,14 @@ class InMemoryLightDeviceRegistryTest {
         r.setBrightness("light-1", -3);
         assertEquals(0.0, r.get("light-1").orElseThrow().brightness(), 1e-9);
     }
+
+    @Test
+    void setReachableAndRefreshAll() {
+        InMemoryLightDeviceRegistry r = new InMemoryLightDeviceRegistry();
+        assertTrue(r.get("light-1").orElseThrow().reachable());
+        r.setReachable("light-1", false);
+        assertFalse(r.get("light-1").orElseThrow().reachable());
+        r.refreshReachabilityAll(true);
+        assertTrue(r.get("light-1").orElseThrow().reachable());
+    }
 }
