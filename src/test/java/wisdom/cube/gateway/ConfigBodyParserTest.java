@@ -3,6 +3,7 @@ package wisdom.cube.gateway;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ConfigBodyParserTest {
@@ -93,5 +94,14 @@ class ConfigBodyParserTest {
         assertEquals("normal", c.getDefaultPrivacyMode());
         c.deviceName = "z";
         assertEquals("z", c.getDeviceName());
+    }
+
+    @Test
+    void applyPatchUpdatesGlobalOffline() {
+        ConfigBodyParser.MutableConfig c = new ConfigBodyParser.MutableConfig("A", "paranoid");
+        ConfigBodyParser.applyPatch("{\"global_offline\":true}", c);
+        assertTrue(c.isGlobalOffline());
+        ConfigBodyParser.applyPatch("{\"global_offline\":false}", c);
+        assertFalse(c.isGlobalOffline());
     }
 }
