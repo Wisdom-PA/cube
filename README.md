@@ -7,6 +7,14 @@ On-device voice assistant (Java): STT, TTS, LLM, intent engine, device control, 
 
 **Build:** Maven (Java 17). From `cube/` run `.\mvnw.cmd verify` (Windows) or `./mvnw verify` (Git Bash). **No Maven install needed**—the Maven Wrapper downloads Maven on first run.
 
+**Run the HTTP gateway (Phase 1):** after `mvn -q -DskipTests package`, start the contract stub on port 8080:
+
+```bash
+java -cp target/cube-0.1.0-SNAPSHOT.jar wisdom.cube.Cube --port 8080
+```
+
+Or set **`CUBE_PORT`** (e.g. `8080`) and run with no args (same as `Cube.main` with empty `args`). Stop with Ctrl+C (JVM shutdown hook stops the server).
+
 **Optional: install Maven globally** (e.g. for other projects): [Maven – Download](https://maven.apache.org/download.cgi) (binary zip → unzip → add `bin` to PATH), or **choco install maven** if you use Chocolatey. (Maven is not in winget.)
 
-Phase 1: scaffold ✓, test config ✓, core interfaces ✓, API contract (contracts repo) ✓, skeleton gateway ✓ (`HttpServerGateway`: `/status`, `/config`, `/devices`, `/routines`, `/profiles`, `/logs`, `/backup`, `/restore` per `openapi/cube-app.yaml`). Next: Phase 2 (app scaffold, test + Storybook, mock cube, base screens).
+**Phase 1 (complete):** scaffold, tests + coverage gates, core interfaces + logging types, OpenAPI-aligned **`HttpServerGateway`**, **`Cube`** entry point with **`--port` / `CUBE_PORT`**. Next: Phase 4+ (hardware, OS, voice) per **GettingStarted.md**.
