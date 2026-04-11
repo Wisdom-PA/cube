@@ -1,8 +1,5 @@
 package wisdom.cube.logging;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -10,23 +7,23 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
 
 class InMemoryBehaviourLogStoreTest {
 
-    InMemoryBehaviourLogStore store;
-
-    @BeforeEach
-    void setUp() {
-        store = new InMemoryBehaviourLogStore();
+    private static InMemoryBehaviourLogStore emptyStore() {
+        return new InMemoryBehaviourLogStore();
     }
 
     @Test
     void emptyStoreSerializesEmptyChains() {
+        InMemoryBehaviourLogStore store = emptyStore();
         assertEquals("{\"chains\":[]}", store.toLogQueryJson());
     }
 
     @Test
     void recordDevicePatchProducesChainWithIdAndIntent() {
+        InMemoryBehaviourLogStore store = emptyStore();
         store.recordDevicePatchFromApp("light-1", "{\"power\":true}", "{\"id\":\"light-1\"}");
         String json = store.toLogQueryJson();
         assertTrue(json.contains("\"chains\":["));
@@ -38,6 +35,7 @@ class InMemoryBehaviourLogStoreTest {
 
     @Test
     void recordChatProducesUserUtteranceInIntent() {
+        InMemoryBehaviourLogStore store = emptyStore();
         store.recordChatFromApp("hello cube", "On-device (stub): hello cube");
         String json = store.toLogQueryJson();
         assertTrue(json.contains("hello cube"));
@@ -46,6 +44,7 @@ class InMemoryBehaviourLogStoreTest {
 
     @Test
     void chainWithPrivacyChangeAndInternetCallSerializesBoth() {
+        InMemoryBehaviourLogStore store = emptyStore();
         UUID cid = UUID.randomUUID();
         Instant now = Instant.now();
         store.writeChainSummary(new BehaviourLogSchema.ChainSummary(
@@ -75,6 +74,7 @@ class InMemoryBehaviourLogStoreTest {
 
     @Test
     void summaryOnlyChainHasEmptyIntentAndActionArrays() {
+        InMemoryBehaviourLogStore store = emptyStore();
         UUID cid = UUID.randomUUID();
         Instant now = Instant.now();
         store.writeChainSummary(new BehaviourLogSchema.ChainSummary(
@@ -87,6 +87,7 @@ class InMemoryBehaviourLogStoreTest {
 
     @Test
     void truncatesLongPatchResponseSummary() {
+        InMemoryBehaviourLogStore store = emptyStore();
         String longDevice = "{\"k\":\"" + "z".repeat(600) + "\"}";
         store.recordDevicePatchFromApp("light-1", "{}", longDevice);
         assertTrue(store.toLogQueryJson().contains("…"));
@@ -94,6 +95,7 @@ class InMemoryBehaviourLogStoreTest {
 
     @Test
     void multipleChainsKeepInsertionOrder() {
+        InMemoryBehaviourLogStore store = emptyStore();
         store.recordChatFromApp("first", "r1");
         store.recordChatFromApp("second", "r2");
         String json = store.toLogQueryJson();
