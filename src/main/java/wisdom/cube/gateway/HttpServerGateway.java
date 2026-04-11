@@ -45,8 +45,8 @@ public final class HttpServerGateway implements ApiGateway {
     private final Object configLock = new Object();
     private final ConfigBodyParser.MutableConfig config =
         new ConfigBodyParser.MutableConfig("Mock Cube", "paranoid");
-    private final DeviceFixtureStore deviceStore = defaultDeviceStore();
-    private final DeviceDiscoveryService deviceDiscovery = new NoOpDeviceDiscoveryService();
+    private final DeviceFixtureStore deviceStore;
+    private final DeviceDiscoveryService deviceDiscovery;
     private final InMemoryBehaviourLogStore behaviourLog;
 
     public HttpServerGateway(int port, Executor executor) {
@@ -54,9 +54,36 @@ public final class HttpServerGateway implements ApiGateway {
     }
 
     public HttpServerGateway(int port, Executor executor, InMemoryBehaviourLogStore behaviourLog) {
+        this(port, executor, behaviourLog, defaultDeviceStore(), new NoOpDeviceDiscoveryService());
+    }
+
+    /**
+     * Shares {@link DeviceFixtureStore} and log with other cube subsystems (e.g. {@link wisdom.cube.voice.VoicePipelineFactory}).
+     */
+    public HttpServerGateway(int port, Executor executor, InMemoryBehaviourLogStore behaviourLog, DeviceFixtureStore deviceStore) {
+        this(port, executor, behaviourLog, deviceStore, new NoOpDeviceDiscoveryService());
+    }
+
+    public HttpServerGateway(
+        int port,
+        Executor executor,
+        InMemoryBehaviourLogStore behaviourLog,
+        DeviceFixtureStore deviceStore,
+        DeviceDiscoveryService deviceDiscovery
+    ) {
         this.port = port;
         this.executor = executor != null ? executor : Runnable::run;
         this.behaviourLog = behaviourLog;
+        this.deviceStore = deviceStore;
+        this.deviceDiscovery = deviceDiscovery != null ? deviceDiscovery : new NoOpDeviceDiscoveryService();
+    }
+
+    public DeviceFixtureStore deviceStore() {
+        return deviceStore;
+    }
+
+    public InMemoryBehaviourLogStore behaviourLog() {
+        return behaviourLog;
     }
 
     @Override
