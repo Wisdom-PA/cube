@@ -1,6 +1,7 @@
 package wisdom.cube.voice;
 
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -25,6 +26,7 @@ import wisdom.cube.core.TtsService;
 import wisdom.cube.device.DefaultAutomationEngine;
 import wisdom.cube.device.InMemoryLightDeviceRegistry;
 import wisdom.cube.dialogue.DialogueManager;
+import wisdom.cube.dialogue.SensitiveActionConfirmationPolicy;
 import wisdom.cube.intent.IntentClassification;
 import wisdom.cube.intent.IntentClassifier;
 import wisdom.cube.intent.RuleBasedIntentClassifier;
@@ -247,5 +249,102 @@ class VoiceTurnPipelineTest {
         assertFalse(r.ok());
         verify(tts).speak("I could not reach that device right now.");
         verify(llm, never()).complete(anyString());
+    }
+
+    @Test
+    void voiceContextChainResolvesTurnItOffAfterSuccessfulAutomation() {
+        AtomicLong clock = new AtomicLong(0L);
+        VoiceContextChain ctx = new VoiceContextChain(clock::get);
+        InMemoryLightDeviceRegistry registry = new InMemoryLightDeviceRegistry();
+        VoiceTurnPipeline p = new VoiceTurnPipeline(
+            stt,
+            tts,
+            llm,
+            new RuleBasedIntentClassifier(),
+            new DialogueManager(clock::get),
+            new InMemoryMemoryStore(),
+            "adult-1",
+            Optional.of(new DefaultAutomationEngine(registry)),
+            Optional.empty(),
+            Optional.of(ctx),
+            Optional.empty()
+        );
+        assertTrue(p.processUtterance("turn on living room light", Optional.empty()).ok());
+        assertTrue(registry.get("light-1").orElseThrow().power());
+        clock.addAndGet(10_000L);
+        assertTrue(p.processUtterance("turn it off", Optional.empty()).ok());
+        assertFalse(registry.get("light-1").orElseThrow().power());
+        verify(llm, never()).complete(anyString());
+    }
+
+    @Test
+    void sensitiveConfirmationPolicyBlocksAutomation() {
+        SensitiveActionConfirmationPolicy confirmAll = intent -> true;
+        IntentClassifier cl = mock(IntentClassifier.class);
+        when(cl.classify(anyString())).thenReturn(
+            new IntentClassification.Resolved(new AutomationEngine.Intent("set_light", "living_room", "on")));
+        VoiceTurnPipeline p = new VoiceTurnPipeline(
+            stt,
+            tts,
+            llm,
+            cl,
+            new DialogueManager(),
+            new InMemoryMemoryStore(),
+            "adult-1",
+            Optional.of(new DefaultAutomationEngine(new InMemoryLightDeviceRegistry())),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(confirmAll)
+        );
+        VoiceTurnResult r = p.processUtterance("turn on living room light", Optional.empty());
+        assertFalse(r.ok());
+        assertEquals("confirmation_required", r.code());
+        verify(tts).speak("For safety, please confirm that action in the mobile app.");
+    }
+
+    @Test
+    void automationExecuteReturnsEmptyOptional() {
+        AutomationEngine auto = mock(AutomationEngine.class);
+        when(auto.execute(any())).thenReturn(Optional.empty());
+        IntentClassifier cl = mock(IntentClassifier.class);
+        when(cl.classify(anyString())).thenReturn(
+            new IntentClassification.Resolved(new AutomationEngine.Intent("set_light", "living_room", "on")));
+        VoiceTurnPipeline p = new VoiceTurnPipeline(
+            stt,
+            tts,
+            llm,
+            cl,
+            new DialogueManager(),
+            new InMemoryMemoryStore(),
+            "adult-1",
+            Optional.of(auto),
+            Optional.empty()
+        );
+        VoiceTurnResult r = p.processUtterance("turn on living room light", Optional.empty());
+        assertFalse(r.ok());
+        assertEquals("automation_empty", r.code());
+        verify(tts).speak("I could not reach that device.");
+    }
+
+    @Test
+    void listenDeadlineAfterSlowTranscribeReturnsError() {
+        AtomicLong clock = new AtomicLong(0L);
+        DialogueManager dialogue = new DialogueManager(clock::get);
+        when(stt.transcribe()).thenAnswer(inv -> {
+            clock.addAndGet(DialogueManager.LISTEN_TIMEOUT_MS + 1);
+            return Optional.of("turn on living room light");
+        });
+        VoiceTurnPipeline p = new VoiceTurnPipeline(
+            stt,
+            tts,
+            llm,
+            new RuleBasedIntentClassifier(),
+            dialogue,
+            new InMemoryMemoryStore(),
+            "adult-1"
+        );
+        VoiceTurnResult r = p.runTurnAfterWake();
+        assertFalse(r.ok());
+        assertEquals("listen_deadline", r.code());
     }
 }
