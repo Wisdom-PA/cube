@@ -1,7 +1,9 @@
 package wisdom.cube.voice;
 
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -20,6 +22,13 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import wisdom.cube.core.AutomationEngine;
+import wisdom.cube.internet.CloudFallbackLlmService;
+import wisdom.cube.internet.DefaultInternetAccessGate;
+import wisdom.cube.internet.DefaultProfileInternetPolicy;
+import wisdom.cube.internet.InternetAccessGate;
+import wisdom.cube.internet.SessionInternetConsent;
+import wisdom.cube.internet.StubCloudLlmClient;
+import wisdom.cube.internet.VoiceCloudConsent;
 import wisdom.cube.core.LlmService;
 import wisdom.cube.core.SttService;
 import wisdom.cube.core.TtsService;
@@ -324,6 +333,86 @@ class VoiceTurnPipelineTest {
         assertFalse(r.ok());
         assertEquals("automation_empty", r.code());
         verify(tts).speak("I could not reach that device.");
+    }
+
+    @Test
+    void paranoidModeUsesCloudWhenExplicitAllow() {
+        AtomicReference<VoiceCloudConsent> ref = new AtomicReference<>(VoiceCloudConsent.UNSET);
+        InternetAccessGate gate = new DefaultInternetAccessGate(
+            () -> false,
+            () -> "paranoid",
+            new SessionInternetConsent(),
+            new DefaultProfileInternetPolicy(),
+            ref
+        );
+        LlmService llm = new CloudFallbackLlmService(
+            p -> Optional.of("on-device"),
+            Optional.of(new StubCloudLlmClient("cloud-answer")),
+            gate,
+            "adult-1",
+            Optional.empty(),
+            UUID::randomUUID
+        );
+        IntentClassifier cl = mock(IntentClassifier.class);
+        when(cl.classify(anyString())).thenReturn(
+            new IntentClassification.Resolved(new AutomationEngine.Intent("question", "none", "weather")));
+        VoiceTurnPipeline p = new VoiceTurnPipeline(
+            stt,
+            tts,
+            llm,
+            cl,
+            new DialogueManager(),
+            new InMemoryMemoryStore(),
+            "adult-1",
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(ref)
+        );
+        VoiceTurnResult r = p.processUtterance("what is the weather", Optional.empty(), Optional.of(true));
+        assertTrue(r.ok());
+        assertEquals("cloud-answer", r.spokenText().orElseThrow());
+    }
+
+    @Test
+    void paranoidModeWithoutAllowUsesOnDevice() {
+        AtomicReference<VoiceCloudConsent> ref = new AtomicReference<>(VoiceCloudConsent.UNSET);
+        InternetAccessGate gate = new DefaultInternetAccessGate(
+            () -> false,
+            () -> "paranoid",
+            new SessionInternetConsent(),
+            new DefaultProfileInternetPolicy(),
+            ref
+        );
+        LlmService llm = new CloudFallbackLlmService(
+            p -> Optional.of("on-device"),
+            Optional.of(new StubCloudLlmClient("cloud-answer")),
+            gate,
+            "adult-1",
+            Optional.empty(),
+            UUID::randomUUID
+        );
+        IntentClassifier cl = mock(IntentClassifier.class);
+        when(cl.classify(anyString())).thenReturn(
+            new IntentClassification.Resolved(new AutomationEngine.Intent("question", "none", "weather")));
+        VoiceTurnPipeline p = new VoiceTurnPipeline(
+            stt,
+            tts,
+            llm,
+            cl,
+            new DialogueManager(),
+            new InMemoryMemoryStore(),
+            "adult-1",
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(ref)
+        );
+        VoiceTurnResult r = p.processUtterance("what is the weather", Optional.empty());
+        assertTrue(r.ok());
+        assertEquals("on-device", r.spokenText().orElseThrow());
     }
 
     @Test

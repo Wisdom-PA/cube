@@ -10,6 +10,7 @@ import java.util.concurrent.Executors;
 import org.junit.jupiter.api.AfterEach;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
@@ -539,6 +540,13 @@ class HttpServerGatewayTest {
             .build();
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
         assertEquals(404, response.statusCode());
+    }
+
+    @Test
+    void accessorsExposeGlobalOfflineAndPrivacyMode() {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        assertFalse(gateway.isGlobalOffline());
+        assertEquals("paranoid", gateway.getDefaultPrivacyMode());
     }
 
     @Test

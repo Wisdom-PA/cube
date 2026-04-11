@@ -6,12 +6,14 @@ import wisdom.cube.core.SttService;
 import wisdom.cube.core.TtsService;
 import wisdom.cube.dialogue.DialogueManager;
 import wisdom.cube.dialogue.SensitiveActionConfirmationPolicy;
+import wisdom.cube.internet.VoiceCloudConsent;
 import wisdom.cube.intent.IntentClassification;
 import wisdom.cube.intent.IntentClassifier;
 import wisdom.cube.logging.BehaviourLogWriter;
 import wisdom.cube.memory.MemoryStore;
 
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Wake → STT → intent → (optional clarification) → device automation and/or LLM → TTS.
@@ -31,6 +33,7 @@ public final class VoiceTurnPipeline {
     private final Optional<BehaviourLogWriter> behaviourLog;
     private final Optional<VoiceContextChain> voiceContext;
     private final Optional<SensitiveActionConfirmationPolicy> confirmationPolicy;
+    private final Optional<AtomicReference<VoiceCloudConsent>> voiceCloudConsentSlot;
 
     public VoiceTurnPipeline(
         SttService stt,
@@ -49,6 +52,7 @@ public final class VoiceTurnPipeline {
             dialogue,
             memoryStore,
             defaultProfileId,
+            Optional.empty(),
             Optional.empty(),
             Optional.empty(),
             Optional.empty(),
@@ -78,6 +82,7 @@ public final class VoiceTurnPipeline {
             automation,
             behaviourLog,
             Optional.empty(),
+            Optional.empty(),
             Optional.empty()
         );
     }
@@ -95,6 +100,36 @@ public final class VoiceTurnPipeline {
         Optional<VoiceContextChain> voiceContext,
         Optional<SensitiveActionConfirmationPolicy> confirmationPolicy
     ) {
+        this(
+            stt,
+            tts,
+            llm,
+            classifier,
+            dialogue,
+            memoryStore,
+            defaultProfileId,
+            automation,
+            behaviourLog,
+            voiceContext,
+            confirmationPolicy,
+            Optional.empty()
+        );
+    }
+
+    public VoiceTurnPipeline(
+        SttService stt,
+        TtsService tts,
+        LlmService llm,
+        IntentClassifier classifier,
+        DialogueManager dialogue,
+        MemoryStore memoryStore,
+        String defaultProfileId,
+        Optional<AutomationEngine> automation,
+        Optional<BehaviourLogWriter> behaviourLog,
+        Optional<VoiceContextChain> voiceContext,
+        Optional<SensitiveActionConfirmationPolicy> confirmationPolicy,
+        Optional<AtomicReference<VoiceCloudConsent>> voiceCloudConsentSlot
+    ) {
         this.stt = stt;
         this.tts = tts;
         this.llm = llm;
@@ -106,6 +141,7 @@ public final class VoiceTurnPipeline {
         this.behaviourLog = behaviourLog == null ? Optional.empty() : behaviourLog;
         this.voiceContext = voiceContext == null ? Optional.empty() : voiceContext;
         this.confirmationPolicy = confirmationPolicy == null ? Optional.empty() : confirmationPolicy;
+        this.voiceCloudConsentSlot = voiceCloudConsentSlot == null ? Optional.empty() : voiceCloudConsentSlot;
     }
 
     /**
@@ -132,6 +168,39 @@ public final class VoiceTurnPipeline {
      * {@code clarificationReply} is present, classifies again once (F4.T3 one follow-up).
      */
     public VoiceTurnResult processUtterance(String transcript, Optional<String> clarificationReply) {
+        return processUtterance(transcript, clarificationReply, Optional.empty());
+    }
+
+    /**
+     * Same as {@link #processUtterance(String, Optional)} with explicit cloud consent for this turn (F5.T2.S1).
+     * When {@code allowCloud} is empty, voice cloud consent stays {@link VoiceCloudConsent#UNSET}.
+     */
+    public VoiceTurnResult processUtterance(
+        String transcript,
+        Optional<String> clarificationReply,
+        Optional<Boolean> allowCloudForThisTurn
+    ) {
+        Optional<AtomicReference<VoiceCloudConsent>> slot = voiceCloudConsentSlot;
+        if (slot.isPresent()) {
+            AtomicReference<VoiceCloudConsent> ref = slot.get();
+            VoiceCloudConsent previous = ref.get();
+            if (allowCloudForThisTurn.isEmpty()) {
+                ref.set(VoiceCloudConsent.UNSET);
+            } else {
+                ref.set(Boolean.TRUE.equals(allowCloudForThisTurn.get())
+                    ? VoiceCloudConsent.ALLOW
+                    : VoiceCloudConsent.DENY);
+            }
+            try {
+                return doProcessUtterance(transcript, clarificationReply);
+            } finally {
+                ref.set(previous);
+            }
+        }
+        return doProcessUtterance(transcript, clarificationReply);
+    }
+
+    private VoiceTurnResult doProcessUtterance(String transcript, Optional<String> clarificationReply) {
         dialogue.onTranscriptReceived();
         memoryStore.remember(defaultProfileId, "last_utterance", transcript.trim());
 
