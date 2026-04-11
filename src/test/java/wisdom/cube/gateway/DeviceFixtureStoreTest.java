@@ -16,6 +16,7 @@ class DeviceFixtureStoreTest {
     @Test
     void patchUpdatesPowerAndBrightness() {
         DeviceFixtureStore store = new DeviceFixtureStore();
+        assertTrue(store.listJson().contains("\"reachable\":true"));
         assertTrue(store.listJson().contains("\"power\":true"));
         String updated = store.patch("light-2", "{\"power\":true,\"brightness\":0.5}");
         assertNotNull(updated);

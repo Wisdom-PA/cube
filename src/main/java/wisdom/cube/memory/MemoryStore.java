@@ -14,4 +14,9 @@ public interface MemoryStore {
     void forget(String profileId, String key);
 
     void forgetProfile(String profileId);
+
+    /**
+     * Removes all keys for the profile whose logical key starts with {@code keyPrefix} (F4.T4.S3 bulk forget).
+     */
+    void forgetKeyPrefix(String profileId, String keyPrefix);
 }

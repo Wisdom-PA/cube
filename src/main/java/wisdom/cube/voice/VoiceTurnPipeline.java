@@ -171,6 +171,7 @@ public final class VoiceTurnPipeline {
         String code = result.errorCode() == null ? "" : result.errorCode();
         return switch (code) {
             case "NOT_FOUND" -> "I could not find a light in that room.";
+            case "UNREACHABLE" -> "I could not reach that device right now.";
             case "BAD_PARAM" -> "That brightness or setting was not valid.";
             case "UNSUPPORTED" -> "I cannot do that yet.";
             default -> result.errorMessage() != null && !result.errorMessage().isBlank()

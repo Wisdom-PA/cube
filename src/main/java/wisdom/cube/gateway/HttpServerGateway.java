@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -15,6 +16,7 @@ import com.sun.net.httpserver.HttpServer;
 import wisdom.cube.core.ApiGateway;
 import wisdom.cube.device.DeviceDiscoveryService;
 import wisdom.cube.device.InMemoryLightDeviceRegistry;
+import wisdom.cube.device.LightDevice;
 import wisdom.cube.device.NoOpDeviceDiscoveryService;
 import wisdom.cube.logging.InMemoryBehaviourLogStore;
 
@@ -190,6 +192,13 @@ public final class HttpServerGateway implements ApiGateway {
         }
         if ("PATCH".equals(method)) {
             String body = readBody(exchange);
+            if (deviceStore.registry().contains(deviceId)) {
+                Optional<LightDevice> cur = deviceStore.registry().get(deviceId);
+                if (cur.isPresent() && !cur.get().reachable()) {
+                    sendJson(exchange, 503, DeviceApiErrors.deviceUnreachableJson());
+                    return;
+                }
+            }
             String updated = deviceStore.patch(deviceId, body);
             if (updated == null) {
                 sendJson(exchange, 404, DeviceApiErrors.deviceNotFoundJson());

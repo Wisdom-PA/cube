@@ -35,4 +35,13 @@ public final class InMemoryMemoryStore implements MemoryStore {
         String prefix = profileId + "\u0000";
         backing.keySet().removeIf(k -> k.startsWith(prefix));
     }
+
+    @Override
+    public void forgetKeyPrefix(String profileId, String keyPrefix) {
+        if (keyPrefix == null) {
+            return;
+        }
+        String start = compoundKey(profileId, keyPrefix);
+        backing.keySet().removeIf(k -> k.startsWith(start));
+    }
 }

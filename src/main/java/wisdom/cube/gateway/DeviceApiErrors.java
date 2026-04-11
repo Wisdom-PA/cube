@@ -10,4 +10,8 @@ public final class DeviceApiErrors {
     public static String deviceNotFoundJson() {
         return "{\"error\":{\"code\":\"DEVICE_NOT_FOUND\",\"message\":\"Unknown device id\"}}";
     }
+
+    public static String deviceUnreachableJson() {
+        return "{\"error\":{\"code\":\"DEVICE_UNREACHABLE\",\"message\":\"Device is not reachable\"}}";
+    }
 }

@@ -25,4 +25,24 @@ class InMemoryMemoryStoreTest {
         assertTrue(m.recall("p1", "a").isEmpty());
         assertEquals("2", m.recall("p2", "a").orElseThrow());
     }
+
+    @Test
+    void forgetKeyPrefixNullIsNoOp() {
+        InMemoryMemoryStore m = new InMemoryMemoryStore();
+        m.remember("p1", "k", "v");
+        m.forgetKeyPrefix("p1", null);
+        assertEquals("v", m.recall("p1", "k").orElseThrow());
+    }
+
+    @Test
+    void forgetKeyPrefixRemovesMatchingKeysOnly() {
+        InMemoryMemoryStore m = new InMemoryMemoryStore();
+        m.remember("p1", "ctx:room1", "a");
+        m.remember("p1", "ctx:room2", "b");
+        m.remember("p1", "other", "c");
+        m.forgetKeyPrefix("p1", "ctx:");
+        assertTrue(m.recall("p1", "ctx:room1").isEmpty());
+        assertTrue(m.recall("p1", "ctx:room2").isEmpty());
+        assertEquals("c", m.recall("p1", "other").orElseThrow());
+    }
 }

@@ -18,18 +18,20 @@ public final class InMemoryLightDeviceRegistry implements LightDeviceRegistry {
         final String room;
         boolean power;
         double brightness;
+        boolean reachable;
 
-        Mutable(String id, String name, String type, String room, boolean power, double brightness) {
+        Mutable(String id, String name, String type, String room, boolean power, double brightness, boolean reachable) {
             this.id = id;
             this.name = name;
             this.type = type;
             this.room = room;
             this.power = power;
             this.brightness = brightness;
+            this.reachable = reachable;
         }
 
         LightDevice snapshot() {
-            return new LightDevice(id, name, type, room, power, brightness);
+            return new LightDevice(id, name, type, room, power, brightness, reachable);
         }
     }
 
@@ -41,7 +43,14 @@ public final class InMemoryLightDeviceRegistry implements LightDeviceRegistry {
     }
 
     private void putDefault(String id, String name, String type, String room, boolean power, double brightness) {
-        byId.put(id, new Mutable(id, name, type, room, power, brightness));
+        byId.put(id, new Mutable(id, name, type, room, power, brightness, true));
+    }
+
+    /** Marks every device reachable or not (e.g. after a discovery / health sweep). */
+    public void refreshReachabilityAll(boolean reachable) {
+        for (Mutable m : byId.values()) {
+            m.reachable = reachable;
+        }
     }
 
     @Override
@@ -77,6 +86,14 @@ public final class InMemoryLightDeviceRegistry implements LightDeviceRegistry {
         Mutable m = byId.get(id);
         if (m != null) {
             m.brightness = clampUnit(brightness);
+        }
+    }
+
+    @Override
+    public void setReachable(String id, boolean reachable) {
+        Mutable m = byId.get(id);
+        if (m != null) {
+            m.reachable = reachable;
         }
     }
 

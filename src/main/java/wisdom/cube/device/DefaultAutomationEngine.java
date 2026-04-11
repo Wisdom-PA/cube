@@ -38,6 +38,10 @@ public final class DefaultAutomationEngine implements AutomationEngine {
         if (id.isEmpty()) {
             return Optional.of(ActionResult.failure("NOT_FOUND", "No light in room"));
         }
+        Optional<ActionResult> reach = checkReachable(id.get());
+        if (reach.isPresent()) {
+            return reach;
+        }
         String p = parameters == null ? "" : parameters.trim().toLowerCase(Locale.ROOT);
         if (!"on".equals(p) && !"off".equals(p)) {
             return Optional.of(ActionResult.failure("BAD_PARAM", "Expected on or off"));
@@ -51,6 +55,10 @@ public final class DefaultAutomationEngine implements AutomationEngine {
         if (id.isEmpty()) {
             return Optional.of(ActionResult.failure("NOT_FOUND", "No light in room"));
         }
+        Optional<ActionResult> reach = checkReachable(id.get());
+        if (reach.isPresent()) {
+            return reach;
+        }
         if (parameters == null || parameters.isBlank()) {
             return Optional.of(ActionResult.failure("BAD_PARAM", "Missing brightness"));
         }
@@ -62,5 +70,13 @@ public final class DefaultAutomationEngine implements AutomationEngine {
         }
         lights.setBrightness(id.get(), level);
         return Optional.of(ActionResult.ok());
+    }
+
+    private Optional<ActionResult> checkReachable(String deviceId) {
+        Optional<LightDevice> d = lights.get(deviceId);
+        if (d.isPresent() && !d.get().reachable()) {
+            return Optional.of(ActionResult.failure("UNREACHABLE", "Device unreachable"));
+        }
+        return Optional.empty();
     }
 }
