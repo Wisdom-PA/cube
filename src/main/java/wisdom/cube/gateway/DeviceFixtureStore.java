@@ -11,7 +11,8 @@ import java.util.regex.Pattern;
 public final class DeviceFixtureStore {
 
     private static final Pattern POWER = Pattern.compile("\"power\"\\s*:\\s*(true|false)");
-    private static final Pattern BRIGHTNESS = Pattern.compile("\"brightness\"\\s*:\\s*([0-9]+(?:\\.[0-9]+)?)");
+    private static final Pattern BRIGHTNESS = Pattern.compile(
+        "\"brightness\"\\s*:\\s*(-?[0-9]+(?:\\.[0-9]+)?)");
 
     public static final class Entry {
         final String id;

@@ -314,4 +314,136 @@ class HttpServerGatewayTest {
         HttpResponse<String> response = client.send(req, HttpResponse.BodyHandlers.ofString());
         assertEquals(400, response.statusCode());
     }
+
+    @Test
+    void getPortReturnsZeroBeforeStart() {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        assertEquals(0, gateway.getPort());
+    }
+
+    @Test
+    void startWithNullExecutorStillServesRequests() throws Exception {
+        gateway = new HttpServerGateway(0, null);
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/status"))
+            .GET()
+            .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode());
+    }
+
+    @Test
+    void chatGetReturns405() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/chat"))
+            .GET()
+            .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(405, response.statusCode());
+    }
+
+    @Test
+    void internetActivityPostReturns405() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/internet-activity"))
+            .POST(HttpRequest.BodyPublishers.noBody())
+            .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(405, response.statusCode());
+    }
+
+    @Test
+    void getSingleDeviceReturns405() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/devices/light-1"))
+            .GET()
+            .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(405, response.statusCode());
+    }
+
+    @Test
+    void patchDevicesCollectionReturns405() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/devices"))
+            .method("PATCH", HttpRequest.BodyPublishers.ofString("{}"))
+            .header("Content-Type", "application/json")
+            .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(405, response.statusCode());
+    }
+
+    @Test
+    void patchDevicePathWithExtraSegmentReturns404() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/devices/a/b"))
+            .method("PATCH", HttpRequest.BodyPublishers.ofString("{}"))
+            .header("Content-Type", "application/json")
+            .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(404, response.statusCode());
+    }
+
+    @Test
+    void patchConfigGlobalOfflineReflectedInStatus() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest patch = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/config"))
+            .method("PATCH", HttpRequest.BodyPublishers.ofString("{\"global_offline\":true}"))
+            .header("Content-Type", "application/json")
+            .build();
+        HttpResponse<String> patched = client.send(patch, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, patched.statusCode());
+        assertTrue(patched.body().contains("\"global_offline\":true"));
+        HttpRequest statusReq = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/status"))
+            .GET()
+            .build();
+        HttpResponse<String> status = client.send(statusReq, HttpResponse.BodyHandlers.ofString());
+        assertTrue(status.body().contains("\"global_offline\":true"));
+    }
+
+    @Test
+    void postChatUnescapesMessageContent() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        String body = "{\"message\":\"say \\\"hi\\\"\"}";
+        HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/chat"))
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .header("Content-Type", "application/json")
+            .build();
+        HttpResponse<String> response = client.send(req, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("On-device (stub):"));
+        assertTrue(response.body().contains("hi"));
+    }
 }
