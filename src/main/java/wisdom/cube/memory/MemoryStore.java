@@ -1,5 +1,7 @@
 package wisdom.cube.memory;
 
+import java.time.LocalDate;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -19,4 +21,24 @@ public interface MemoryStore {
      * Removes all keys for the profile whose logical key starts with {@code keyPrefix} (F4.T4.S3 bulk forget).
      */
     void forgetKeyPrefix(String profileId, String keyPrefix);
+
+    /**
+     * Keys stored under {@code mem/<day>/…} for “forget today” (F4.T4.S3).
+     */
+    default String memoryDayPrefix(LocalDate day) {
+        return "mem/" + day + "/";
+    }
+
+    default void rememberForDay(String profileId, LocalDate day, String subKey, String value) {
+        remember(profileId, memoryDayPrefix(day) + subKey, value);
+    }
+
+    default void forgetDay(String profileId, LocalDate day) {
+        forgetKeyPrefix(profileId, memoryDayPrefix(day));
+    }
+
+    /**
+     * All logical keys and values for the profile (F4.T4.S4).
+     */
+    Map<String, String> exportProfile(String profileId);
 }

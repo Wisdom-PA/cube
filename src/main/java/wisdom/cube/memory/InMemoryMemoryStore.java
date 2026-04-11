@@ -1,5 +1,6 @@
 package wisdom.cube.memory;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -43,5 +44,18 @@ public final class InMemoryMemoryStore implements MemoryStore {
         }
         String start = compoundKey(profileId, keyPrefix);
         backing.keySet().removeIf(k -> k.startsWith(start));
+    }
+
+    @Override
+    public Map<String, String> exportProfile(String profileId) {
+        String prefix = profileId + "\u0000";
+        Map<String, String> out = new LinkedHashMap<>();
+        for (Map.Entry<String, String> e : backing.entrySet()) {
+            String k = e.getKey();
+            if (k.startsWith(prefix)) {
+                out.put(k.substring(prefix.length()), e.getValue());
+            }
+        }
+        return Map.copyOf(out);
     }
 }

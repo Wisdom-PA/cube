@@ -7,6 +7,7 @@ import wisdom.cube.device.DefaultAutomationEngine;
 import wisdom.cube.dialogue.DialogueManager;
 import wisdom.cube.gateway.HttpServerGateway;
 import wisdom.cube.intent.IntentClassifier;
+import wisdom.cube.intent.SingleDeviceFallbackIntentClassifier;
 import wisdom.cube.memory.MemoryStore;
 
 import java.util.Optional;
@@ -30,16 +31,20 @@ public final class VoicePipelineFactory {
         MemoryStore memoryStore,
         String defaultProfileId
     ) {
+        var registry = gateway.deviceStore().registry();
+        IntentClassifier wrapped = new SingleDeviceFallbackIntentClassifier(registry, intentClassifier);
         return new VoiceTurnPipeline(
             stt,
             tts,
             llm,
-            intentClassifier,
+            wrapped,
             dialogue,
             memoryStore,
             defaultProfileId,
-            Optional.of(new DefaultAutomationEngine(gateway.deviceStore().registry())),
-            Optional.of(gateway.behaviourLog())
+            Optional.of(new DefaultAutomationEngine(registry)),
+            Optional.of(gateway.behaviourLog()),
+            Optional.of(new VoiceContextChain()),
+            Optional.empty()
         );
     }
 }
