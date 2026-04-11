@@ -17,4 +17,12 @@ Or set **`CUBE_PORT`** (e.g. `8080`) and run with no args (same as `Cube.main` w
 
 **Optional: install Maven globally** (e.g. for other projects): [Maven – Download](https://maven.apache.org/download.cgi) (binary zip → unzip → add `bin` to PATH), or **choco install maven** if you use Chocolatey. (Maven is not in winget.)
 
-**Phase 1 (complete):** scaffold, tests + coverage gates, core interfaces + logging types, OpenAPI-aligned **`HttpServerGateway`**, **`Cube`** entry point with **`--port` / `CUBE_PORT`**. **`GET /logs`** is served from an in-memory **`InMemoryBehaviourLogStore`**: successful **`PATCH /devices/{id}`** and **`POST /chat`** append stub chains (F8.T1.S2 starter; no disk or rotation yet). Next: Phase 4+ (hardware, OS, voice) per **GettingStarted.md**.
+**Phase 1 (complete):** scaffold, tests + coverage gates, core interfaces + logging types, OpenAPI-aligned **`HttpServerGateway`**, **`Cube`** entry point with **`--port` / `CUBE_PORT`**. **`GET /logs`** is served from an in-memory **`InMemoryBehaviourLogStore`**: successful **`PATCH /devices/{id}`** and **`POST /chat`** append stub chains (F8.T1.S2 starter; no disk or rotation yet).
+
+**Phases 4–6 (scaffold in this repo):**
+
+- **Phase 4 — Hardware spec:** `docs/HARDWARE_SPEC.md` (F1.T1, F1.T2 baselines for CPU/RAM/storage/audio/power).
+- **Phase 5 — OS:** `docs/OS_PARTITIONS_AND_BUILDROOT.md` and `os/buildroot/README.md` (partition layout, Buildroot integration steps; **no** flashable image built in CI yet). **Supervisor (F2.T2.S2):** Java **`DefaultServiceSupervisor`**, **`ManagedService`**, **`ApiGatewayManagedService`**.
+- **Phase 6 — Voice pipeline (stubs + tests):** `wisdom.cube.audio` (in-memory capture, silent playback), `wakeword`, `vad`, **`VoiceTurnPipeline`** (wake/STT → **`RuleBasedIntentClassifier`** → optional clarification → **`LlmPromptBuilder`** + **`LlmService`** → **`TtsService`**), **`DialogueManager`**, **`InMemoryMemoryStore`**. **Not** included: real mic/speaker drivers, Piper, production STT/LLM runtimes, or **`AutomationEngine`** execution (Phase 7).
+
+See **GettingStarted.md** for the full target sequence; this PR lands **documented specs + Java reference** so hardware and native stacks can attach later.

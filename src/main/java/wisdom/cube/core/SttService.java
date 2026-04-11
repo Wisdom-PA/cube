@@ -4,7 +4,7 @@ import java.util.Optional;
 
 /**
  * Speech-to-text: turns audio into transcribed text.
- * Mocked in unit tests; real implementation in Phase 6.
+ * Mocked in unit tests; hardware STT plugs in behind {@code wisdom.cube.voice.VoiceTurnPipeline}.
  */
 public interface SttService {
 

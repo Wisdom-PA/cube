@@ -4,7 +4,7 @@ import java.util.Optional;
 
 /**
  * On-device (or optionally cloud) LLM: prompt in, response out.
- * Mocked in unit tests; real implementation in Phase 6.
+ * Mocked in unit tests; on-device model runtime plugs in behind {@code wisdom.cube.voice.VoiceTurnPipeline}.
  */
 public interface LlmService {
 
