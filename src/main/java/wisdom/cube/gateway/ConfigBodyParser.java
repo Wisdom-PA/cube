@@ -1,5 +1,7 @@
 package wisdom.cube.gateway;
 
+import wisdom.cube.util.JsonStrings;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -47,19 +49,7 @@ public final class ConfigBodyParser {
     }
 
     public static String jsonEscape(String raw) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < raw.length(); i++) {
-            char c = raw.charAt(i);
-            if (c == '\\' || c == '"') {
-                sb.append('\\');
-            }
-            if (c == '\n' || c == '\r' || c == '\t') {
-                sb.append(' ');
-                continue;
-            }
-            sb.append(c);
-        }
-        return sb.toString();
+        return JsonStrings.escape(raw);
     }
 
     public static String jsonUnescape(String escaped) {

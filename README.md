@@ -17,4 +17,4 @@ Or set **`CUBE_PORT`** (e.g. `8080`) and run with no args (same as `Cube.main` w
 
 **Optional: install Maven globally** (e.g. for other projects): [Maven – Download](https://maven.apache.org/download.cgi) (binary zip → unzip → add `bin` to PATH), or **choco install maven** if you use Chocolatey. (Maven is not in winget.)
 
-**Phase 1 (complete):** scaffold, tests + coverage gates, core interfaces + logging types, OpenAPI-aligned **`HttpServerGateway`**, **`Cube`** entry point with **`--port` / `CUBE_PORT`**. Next: Phase 4+ (hardware, OS, voice) per **GettingStarted.md**.
+**Phase 1 (complete):** scaffold, tests + coverage gates, core interfaces + logging types, OpenAPI-aligned **`HttpServerGateway`**, **`Cube`** entry point with **`--port` / `CUBE_PORT`**. **`GET /logs`** is served from an in-memory **`InMemoryBehaviourLogStore`**: successful **`PATCH /devices/{id}`** and **`POST /chat`** append stub chains (F8.T1.S2 starter; no disk or rotation yet). Next: Phase 4+ (hardware, OS, voice) per **GettingStarted.md**.

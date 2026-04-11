@@ -1,5 +1,7 @@
 package wisdom.cube.gateway;
 
+import wisdom.cube.logging.InMemoryBehaviourLogStore;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -266,6 +268,72 @@ class HttpServerGatewayTest {
         assertEquals(200, response.statusCode());
         assertTrue(response.body().contains("\"power\":true"));
         assertTrue(response.body().contains("0.25"));
+    }
+
+    @Test
+    void getLogsIncludesChainAfterDevicePatch() throws Exception {
+        InMemoryBehaviourLogStore log = new InMemoryBehaviourLogStore();
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor(), log);
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest patch = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/devices/light-1"))
+            .method("PATCH", HttpRequest.BodyPublishers.ofString("{\"power\":false}"))
+            .header("Content-Type", "application/json")
+            .build();
+        assertEquals(200, client.send(patch, HttpResponse.BodyHandlers.ofString()).statusCode());
+        HttpRequest logs = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/logs"))
+            .GET()
+            .build();
+        HttpResponse<String> logRes = client.send(logs, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, logRes.statusCode());
+        assertTrue(logRes.body().contains("\"chains\":["));
+        assertTrue(logRes.body().contains("\"chain_id\":"));
+        assertTrue(logRes.body().contains("Device control (companion app)"));
+    }
+
+    @Test
+    void patchUnknownDeviceDoesNotAppendLogChain() throws Exception {
+        InMemoryBehaviourLogStore log = new InMemoryBehaviourLogStore();
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor(), log);
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest patch = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/devices/unknown-id"))
+            .method("PATCH", HttpRequest.BodyPublishers.ofString("{}"))
+            .header("Content-Type", "application/json")
+            .build();
+        assertEquals(404, client.send(patch, HttpResponse.BodyHandlers.ofString()).statusCode());
+        HttpRequest logs = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/logs"))
+            .GET()
+            .build();
+        assertEquals("{\"chains\":[]}", client.send(logs, HttpResponse.BodyHandlers.ofString()).body());
+    }
+
+    @Test
+    void postChatAppendsBehaviourLogChain() throws Exception {
+        InMemoryBehaviourLogStore log = new InMemoryBehaviourLogStore();
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor(), log);
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/chat"))
+            .POST(HttpRequest.BodyPublishers.ofString("{\"message\":\"hi\"}"))
+            .header("Content-Type", "application/json")
+            .build();
+        assertEquals(200, client.send(req, HttpResponse.BodyHandlers.ofString()).statusCode());
+        HttpRequest logs = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/logs"))
+            .GET()
+            .build();
+        String body = client.send(logs, HttpResponse.BodyHandlers.ofString()).body();
+        assertTrue(body.contains("\"chains\":["));
+        assertTrue(body.contains("hi"));
     }
 
     @Test
