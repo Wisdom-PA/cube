@@ -1,10 +1,10 @@
 package wisdom.cube.wakeword;
 
-import org.junit.jupiter.api.Test;
-
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
 
 class StubWakeWordDetectorTest {
 
@@ -28,6 +28,9 @@ class StubWakeWordDetectorTest {
 
     @Test
     void rejectsNegative() {
-        assertThrows(IllegalArgumentException.class, () -> new StubWakeWordDetector(-1));
+        IllegalArgumentException ex = assertThrows(
+            IllegalArgumentException.class,
+            () -> new StubWakeWordDetector(-1));
+        assertEquals("pollsBeforeFire must be >= 0", ex.getMessage());
     }
 }

@@ -58,7 +58,8 @@ class DefaultServiceSupervisorTest {
         DefaultServiceSupervisor sup = new DefaultServiceSupervisor();
         sup.register(new BoomService("a"), ServiceRestartPolicy.none());
         sup.register(new OkService("b"), ServiceRestartPolicy.none());
-        assertThrows(Exception.class, sup::startAll);
+        Exception ex = assertThrows(Exception.class, sup::startAll);
+        assertEquals("boom", ex.getMessage());
     }
 
     @Test
