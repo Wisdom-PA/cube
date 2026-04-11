@@ -1,6 +1,7 @@
 package wisdom.cube.gateway;
 
 import wisdom.cube.core.ApiGateway;
+import wisdom.cube.logging.InMemoryBehaviourLogStore;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,8 +34,6 @@ public final class HttpServerGateway implements ApiGateway {
         + "{\"id\":\"p2\",\"role\":\"guest\",\"display_name\":\"Guest\"}"
         + "]}";
 
-    private static final String LOGS_JSON = "{\"chains\":[]}";
-
     private static final byte[] BACKUP_BYTES = "WISDOM-BACKUP-v0\n".getBytes(StandardCharsets.UTF_8);
 
     private HttpServer server;
@@ -44,10 +43,16 @@ public final class HttpServerGateway implements ApiGateway {
     private final ConfigBodyParser.MutableConfig config =
         new ConfigBodyParser.MutableConfig("Mock Cube", "paranoid");
     private final DeviceFixtureStore deviceStore = new DeviceFixtureStore();
+    private final InMemoryBehaviourLogStore behaviourLog;
 
     public HttpServerGateway(int port, Executor executor) {
+        this(port, executor, new InMemoryBehaviourLogStore());
+    }
+
+    public HttpServerGateway(int port, Executor executor, InMemoryBehaviourLogStore behaviourLog) {
         this.port = port;
         this.executor = executor != null ? executor : Runnable::run;
+        this.behaviourLog = behaviourLog;
     }
 
     @Override
@@ -148,6 +153,7 @@ public final class HttpServerGateway implements ApiGateway {
                 sendJson(exchange, 404, "{\"error\":\"unknown device\"}");
                 return;
             }
+            behaviourLog.recordDevicePatchFromApp(deviceId, body, updated);
             sendJson(exchange, 200, updated);
             return;
         }
@@ -166,6 +172,7 @@ public final class HttpServerGateway implements ApiGateway {
             return;
         }
         String replyText = "On-device (stub): " + message;
+        behaviourLog.recordChatFromApp(message, replyText);
         String json = "{\"reply\":\"" + ConfigBodyParser.jsonEscape(replyText) + "\",\"source\":\"on_device\"}";
         sendJson(exchange, 200, json);
     }
@@ -210,7 +217,7 @@ public final class HttpServerGateway implements ApiGateway {
             sendResponse(exchange, 405, "Method Not Allowed");
             return;
         }
-        sendJson(exchange, 200, LOGS_JSON);
+        sendJson(exchange, 200, behaviourLog.toLogQueryJson());
     }
 
     private void handleBackup(HttpExchange exchange) throws IOException {
