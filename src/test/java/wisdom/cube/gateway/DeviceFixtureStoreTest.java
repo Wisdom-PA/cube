@@ -1,10 +1,15 @@
 package wisdom.cube.gateway;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
+
+import wisdom.cube.core.AutomationEngine;
+import wisdom.cube.device.DefaultAutomationEngine;
+import wisdom.cube.device.InMemoryLightDeviceRegistry;
 
 class DeviceFixtureStoreTest {
 
@@ -69,5 +74,16 @@ class DeviceFixtureStoreTest {
             high);
         String low = store.patch("light-2", "{\"brightness\":-1}");
         assertTrue(low.contains("\"brightness\":0}") || low.contains("\"brightness\":0,"));
+    }
+
+    @Test
+    void sharedRegistry_patchAndAutomationSeeSameState() {
+        InMemoryLightDeviceRegistry r = new InMemoryLightDeviceRegistry();
+        DeviceFixtureStore store = new DeviceFixtureStore(r);
+        DefaultAutomationEngine engine = new DefaultAutomationEngine(r);
+        assertNotNull(store.patch("light-1", "{\"power\":false}"));
+        assertFalse(r.get("light-1").orElseThrow().power());
+        assertTrue(engine.execute(new AutomationEngine.Intent("set_light", "living_room", "on")).orElseThrow().success());
+        assertTrue(r.get("light-1").orElseThrow().power());
     }
 }
