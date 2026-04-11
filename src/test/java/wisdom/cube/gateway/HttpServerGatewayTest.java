@@ -1,7 +1,5 @@
 package wisdom.cube.gateway;
 
-import wisdom.cube.logging.InMemoryBehaviourLogStore;
-
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -12,8 +10,12 @@ import java.util.concurrent.Executors;
 import org.junit.jupiter.api.AfterEach;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
+
+import wisdom.cube.device.InMemoryLightDeviceRegistry;
+import wisdom.cube.logging.InMemoryBehaviourLogStore;
 
 class HttpServerGatewayTest {
 
@@ -351,6 +353,30 @@ class HttpServerGatewayTest {
         assertEquals(404, response.statusCode());
         assertTrue(response.body().contains("DEVICE_NOT_FOUND"));
         assertTrue(response.body().contains("Unknown device"));
+    }
+
+    @Test
+    void deviceStoreAndBehaviourLogAccessorsReturnInjectedInstances() {
+        InMemoryBehaviourLogStore log = new InMemoryBehaviourLogStore();
+        DeviceFixtureStore ds = new DeviceFixtureStore(new InMemoryLightDeviceRegistry());
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor(), log, ds);
+        assertSame(log, gateway.behaviourLog());
+        assertSame(ds, gateway.deviceStore());
+    }
+
+    @Test
+    void fiveArgConstructorUsesNoOpDiscoveryWhenNull() throws Exception {
+        InMemoryBehaviourLogStore log = new InMemoryBehaviourLogStore();
+        DeviceFixtureStore ds = new DeviceFixtureStore(new InMemoryLightDeviceRegistry());
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor(), log, ds, null);
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/devices/discover"))
+            .POST(HttpRequest.BodyPublishers.noBody())
+            .build();
+        assertEquals(200, client.send(req, HttpResponse.BodyHandlers.ofString()).statusCode());
     }
 
     @Test

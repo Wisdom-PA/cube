@@ -1,6 +1,9 @@
 package wisdom.cube;
 
+import wisdom.cube.device.InMemoryLightDeviceRegistry;
+import wisdom.cube.gateway.DeviceFixtureStore;
 import wisdom.cube.gateway.HttpServerGateway;
+import wisdom.cube.logging.InMemoryBehaviourLogStore;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -53,7 +56,9 @@ public final class Cube {
             t.setDaemon(true);
             return t;
         });
-        HttpServerGateway gateway = new HttpServerGateway(requestedPort, pool);
+        InMemoryBehaviourLogStore behaviourLog = new InMemoryBehaviourLogStore();
+        DeviceFixtureStore deviceStore = new DeviceFixtureStore(new InMemoryLightDeviceRegistry());
+        HttpServerGateway gateway = new HttpServerGateway(requestedPort, pool, behaviourLog, deviceStore);
         gateway.start();
         int bound = gateway.getPort();
         System.out.println("Cube API gateway: http://127.0.0.1:" + bound);
