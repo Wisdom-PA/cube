@@ -15,6 +15,8 @@ java -cp target/cube-0.1.0-SNAPSHOT.jar wisdom.cube.Cube --port 8080
 
 Or set **`CUBE_PORT`** (e.g. `8080`) and run with no args (same as `Cube.main` with empty `args`). Stop with Ctrl+C (JVM shutdown hook stops the server).
 
+**Optional — device health interval (F6.T3.S1):** set **`CUBE_DEVICE_HEALTH_SEC`** to a positive number (seconds) to run periodic `DeviceDiscoveryService` refresh while the gateway is up. Unset or zero disables the background task.
+
 **Optional: install Maven globally** (e.g. for other projects): [Maven – Download](https://maven.apache.org/download.cgi) (binary zip → unzip → add `bin` to PATH), or **choco install maven** if you use Chocolatey. (Maven is not in winget.)
 
 **Phase 1 (complete):** scaffold, tests + coverage gates, core interfaces + logging types, OpenAPI-aligned **`HttpServerGateway`**, **`Cube`** entry point with **`--port` / `CUBE_PORT`**. **`GET /logs`** is served from an in-memory **`InMemoryBehaviourLogStore`**: successful **`PATCH /devices/{id}`** and **`POST /chat`** append stub chains (F8.T1.S2 starter; no disk or rotation yet).

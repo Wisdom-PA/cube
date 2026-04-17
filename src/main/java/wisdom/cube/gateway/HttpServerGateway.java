@@ -15,6 +15,7 @@ import com.sun.net.httpserver.HttpServer;
 
 import wisdom.cube.core.ApiGateway;
 import wisdom.cube.device.DeviceDiscoveryService;
+import wisdom.cube.device.DeviceHealthScheduler;
 import wisdom.cube.device.InMemoryLightDeviceRegistry;
 import wisdom.cube.device.LightDevice;
 import wisdom.cube.device.NoOpDeviceDiscoveryService;
@@ -50,20 +51,22 @@ public final class HttpServerGateway implements ApiGateway {
     private final DeviceFixtureStore deviceStore;
     private final DeviceDiscoveryService deviceDiscovery;
     private final InMemoryBehaviourLogStore behaviourLog;
+    private final long deviceHealthPeriodSeconds;
+    private DeviceHealthScheduler deviceHealthScheduler;
 
     public HttpServerGateway(int port, Executor executor) {
         this(port, executor, new InMemoryBehaviourLogStore());
     }
 
     public HttpServerGateway(int port, Executor executor, InMemoryBehaviourLogStore behaviourLog) {
-        this(port, executor, behaviourLog, defaultDeviceStore(), new NoOpDeviceDiscoveryService());
+        this(port, executor, behaviourLog, defaultDeviceStore(), new NoOpDeviceDiscoveryService(), 0L);
     }
 
     /**
      * Shares {@link DeviceFixtureStore} and log with other cube subsystems (e.g. {@link wisdom.cube.voice.VoicePipelineFactory}).
      */
     public HttpServerGateway(int port, Executor executor, InMemoryBehaviourLogStore behaviourLog, DeviceFixtureStore deviceStore) {
-        this(port, executor, behaviourLog, deviceStore, new NoOpDeviceDiscoveryService());
+        this(port, executor, behaviourLog, deviceStore, new NoOpDeviceDiscoveryService(), 0L);
     }
 
     public HttpServerGateway(
@@ -73,11 +76,23 @@ public final class HttpServerGateway implements ApiGateway {
         DeviceFixtureStore deviceStore,
         DeviceDiscoveryService deviceDiscovery
     ) {
+        this(port, executor, behaviourLog, deviceStore, deviceDiscovery, 0L);
+    }
+
+    public HttpServerGateway(
+        int port,
+        Executor executor,
+        InMemoryBehaviourLogStore behaviourLog,
+        DeviceFixtureStore deviceStore,
+        DeviceDiscoveryService deviceDiscovery,
+        long deviceHealthPeriodSeconds
+    ) {
         this.port = port;
         this.executor = executor != null ? executor : Runnable::run;
         this.behaviourLog = behaviourLog;
         this.deviceStore = deviceStore;
         this.deviceDiscovery = deviceDiscovery != null ? deviceDiscovery : new NoOpDeviceDiscoveryService();
+        this.deviceHealthPeriodSeconds = Math.max(0L, deviceHealthPeriodSeconds);
     }
 
     public DeviceFixtureStore deviceStore() {
@@ -121,6 +136,14 @@ public final class HttpServerGateway implements ApiGateway {
             server.createContext("/chat", this::handleChat);
             server.createContext("/internet-activity", this::handleInternetActivity);
             server.start();
+            if (deviceHealthPeriodSeconds > 0L) {
+                deviceHealthScheduler = DeviceHealthScheduler.everySeconds(
+                    deviceDiscovery,
+                    deviceStore.registry(),
+                    deviceHealthPeriodSeconds
+                );
+                deviceHealthScheduler.start();
+            }
         } catch (IOException e) {
             throw new IllegalStateException("Failed to start API gateway on port " + port, e);
         }
@@ -128,6 +151,10 @@ public final class HttpServerGateway implements ApiGateway {
 
     @Override
     public void stop() {
+        if (deviceHealthScheduler != null) {
+            deviceHealthScheduler.stop();
+            deviceHealthScheduler = null;
+        }
         if (server != null) {
             server.stop(0);
             server = null;

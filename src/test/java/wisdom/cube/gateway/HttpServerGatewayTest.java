@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 import wisdom.cube.device.InMemoryLightDeviceRegistry;
+import wisdom.cube.device.NoOpDeviceDiscoveryService;
 import wisdom.cube.logging.InMemoryBehaviourLogStore;
 
 class HttpServerGatewayTest {
@@ -397,6 +398,22 @@ class HttpServerGatewayTest {
             .POST(HttpRequest.BodyPublishers.noBody())
             .build();
         assertEquals(200, client.send(req, HttpResponse.BodyHandlers.ofString()).statusCode());
+    }
+
+    @Test
+    void startStopWithPeriodicHealthEnabledDoesNotThrow() {
+        InMemoryBehaviourLogStore log = new InMemoryBehaviourLogStore();
+        DeviceFixtureStore ds = new DeviceFixtureStore(new InMemoryLightDeviceRegistry());
+        gateway = new HttpServerGateway(
+            0,
+            Executors.newSingleThreadExecutor(),
+            log,
+            ds,
+            new NoOpDeviceDiscoveryService(),
+            600L
+        );
+        gateway.start();
+        gateway.stop();
     }
 
     @Test

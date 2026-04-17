@@ -1,6 +1,7 @@
 package wisdom.cube;
 
 import wisdom.cube.device.InMemoryLightDeviceRegistry;
+import wisdom.cube.device.NoOpDeviceDiscoveryService;
 import wisdom.cube.gateway.DeviceFixtureStore;
 import wisdom.cube.gateway.HttpServerGateway;
 import wisdom.cube.logging.InMemoryBehaviourLogStore;
@@ -50,6 +51,22 @@ public final class Cube {
         return null;
     }
 
+    /**
+     * Positive interval in seconds for periodic {@link wisdom.cube.device.DeviceDiscoveryService} refresh
+     * (F6.T3.S1). Blank or invalid env disables the scheduler.
+     */
+    static long resolveDeviceHealthPeriodSeconds(String envCubeDeviceHealthSec) {
+        if (envCubeDeviceHealthSec == null || envCubeDeviceHealthSec.isBlank()) {
+            return 0L;
+        }
+        try {
+            long v = Long.parseLong(envCubeDeviceHealthSec.trim());
+            return v > 0L ? v : 0L;
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid CUBE_DEVICE_HEALTH_SEC: " + envCubeDeviceHealthSec, e);
+        }
+    }
+
     private static void runGatewayBlocking(int requestedPort) {
         ExecutorService pool = Executors.newCachedThreadPool(r -> {
             Thread t = new Thread(r, "cube-http");
@@ -58,7 +75,15 @@ public final class Cube {
         });
         InMemoryBehaviourLogStore behaviourLog = new InMemoryBehaviourLogStore();
         DeviceFixtureStore deviceStore = new DeviceFixtureStore(new InMemoryLightDeviceRegistry());
-        HttpServerGateway gateway = new HttpServerGateway(requestedPort, pool, behaviourLog, deviceStore);
+        long healthSec = resolveDeviceHealthPeriodSeconds(System.getenv("CUBE_DEVICE_HEALTH_SEC"));
+        HttpServerGateway gateway = new HttpServerGateway(
+            requestedPort,
+            pool,
+            behaviourLog,
+            deviceStore,
+            new NoOpDeviceDiscoveryService(),
+            healthSec
+        );
         gateway.start();
         int bound = gateway.getPort();
         System.out.println("Cube API gateway: http://127.0.0.1:" + bound);

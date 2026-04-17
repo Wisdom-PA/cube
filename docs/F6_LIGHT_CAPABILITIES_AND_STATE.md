@@ -11,9 +11,15 @@ Implements a **uniform light abstraction layer** (F6.T1.S4) inside `wisdom.cube.
 
 ## Notes
 
-- Current OpenAPI `DeviceSummary` only requires `power` and `brightness` fields for lights; capabilities can be exposed later by extending contracts + app UI in the same change set.
+- OpenAPI `DeviceSummary` includes `reachable` (F6.T3); capabilities remain internal until the contract is extended.
+
+## Device health (F6.T3.S1)
+
+- `DeviceHealthScheduler` runs `DeviceDiscoveryService.refreshDiscoveries` on a fixed interval when enabled.
+- `HttpServerGateway` starts that scheduler when constructed with a positive **device health period** (seconds). `Cube` reads **`CUBE_DEVICE_HEALTH_SEC`**; unset or non‑positive means no background health task.
+- The default stub `NoOpDeviceDiscoveryService` marks in-memory devices reachable on each refresh (integration code replaces this).
 
 ## Traceability
 
-- Tickets: **F6.T1.S4**
+- Tickets: **F6.T1.S4**, **F6.T3.S1**
 
