@@ -140,6 +140,13 @@ class HttpServerGatewayTest {
             .build();
         HttpResponse<String> devRes = client.send(devices, HttpResponse.BodyHandlers.ofString());
         assertTrue(devRes.body().contains("\"power\""));
+        HttpRequest routines = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/routines"))
+            .GET()
+            .build();
+        HttpResponse<String> routinesRes = client.send(routines, HttpResponse.BodyHandlers.ofString());
+        assertTrue(routinesRes.body().contains("Evening lights"));
+        assertTrue(routinesRes.body().contains("\"id\":\"r1\""));
     }
 
     @Test

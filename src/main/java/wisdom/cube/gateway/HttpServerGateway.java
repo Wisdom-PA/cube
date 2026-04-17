@@ -20,6 +20,8 @@ import wisdom.cube.device.InMemoryLightDeviceRegistry;
 import wisdom.cube.device.LightDevice;
 import wisdom.cube.device.NoOpDeviceDiscoveryService;
 import wisdom.cube.logging.InMemoryBehaviourLogStore;
+import wisdom.cube.routine.FixtureRoutineCatalog;
+import wisdom.cube.routine.RoutineCatalog;
 
 /**
  * Skeleton API gateway: JDK {@link HttpServer} implementing paths from {@code openapi/cube-app.yaml}
@@ -29,11 +31,6 @@ public final class HttpServerGateway implements ApiGateway {
 
     private static final Pattern CHAT_MESSAGE_FIELD = Pattern.compile(
         "\"message\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
-
-    private static final String ROUTINES_JSON = "{\"routines\":["
-        + "{\"id\":\"r1\",\"name\":\"Evening lights\"},"
-        + "{\"id\":\"r2\",\"name\":\"Good morning\"}"
-        + "]}";
 
     private static final String PROFILES_JSON = "{\"profiles\":["
         + "{\"id\":\"p1\",\"role\":\"adult\",\"display_name\":\"Adult\"},"
@@ -52,6 +49,7 @@ public final class HttpServerGateway implements ApiGateway {
     private final DeviceDiscoveryService deviceDiscovery;
     private final InMemoryBehaviourLogStore behaviourLog;
     private final long deviceHealthPeriodSeconds;
+    private final RoutineCatalog routineCatalog;
     private DeviceHealthScheduler deviceHealthScheduler;
 
     public HttpServerGateway(int port, Executor executor) {
@@ -59,14 +57,14 @@ public final class HttpServerGateway implements ApiGateway {
     }
 
     public HttpServerGateway(int port, Executor executor, InMemoryBehaviourLogStore behaviourLog) {
-        this(port, executor, behaviourLog, defaultDeviceStore(), new NoOpDeviceDiscoveryService(), 0L);
+        this(port, executor, behaviourLog, defaultDeviceStore(), new NoOpDeviceDiscoveryService(), 0L, null);
     }
 
     /**
      * Shares {@link DeviceFixtureStore} and log with other cube subsystems (e.g. {@link wisdom.cube.voice.VoicePipelineFactory}).
      */
     public HttpServerGateway(int port, Executor executor, InMemoryBehaviourLogStore behaviourLog, DeviceFixtureStore deviceStore) {
-        this(port, executor, behaviourLog, deviceStore, new NoOpDeviceDiscoveryService(), 0L);
+        this(port, executor, behaviourLog, deviceStore, new NoOpDeviceDiscoveryService(), 0L, null);
     }
 
     public HttpServerGateway(
@@ -76,7 +74,7 @@ public final class HttpServerGateway implements ApiGateway {
         DeviceFixtureStore deviceStore,
         DeviceDiscoveryService deviceDiscovery
     ) {
-        this(port, executor, behaviourLog, deviceStore, deviceDiscovery, 0L);
+        this(port, executor, behaviourLog, deviceStore, deviceDiscovery, 0L, null);
     }
 
     public HttpServerGateway(
@@ -87,12 +85,25 @@ public final class HttpServerGateway implements ApiGateway {
         DeviceDiscoveryService deviceDiscovery,
         long deviceHealthPeriodSeconds
     ) {
+        this(port, executor, behaviourLog, deviceStore, deviceDiscovery, deviceHealthPeriodSeconds, null);
+    }
+
+    public HttpServerGateway(
+        int port,
+        Executor executor,
+        InMemoryBehaviourLogStore behaviourLog,
+        DeviceFixtureStore deviceStore,
+        DeviceDiscoveryService deviceDiscovery,
+        long deviceHealthPeriodSeconds,
+        RoutineCatalog routineCatalog
+    ) {
         this.port = port;
         this.executor = executor != null ? executor : Runnable::run;
         this.behaviourLog = behaviourLog;
         this.deviceStore = deviceStore;
         this.deviceDiscovery = deviceDiscovery != null ? deviceDiscovery : new NoOpDeviceDiscoveryService();
         this.deviceHealthPeriodSeconds = Math.max(0L, deviceHealthPeriodSeconds);
+        this.routineCatalog = routineCatalog != null ? routineCatalog : new FixtureRoutineCatalog();
     }
 
     public DeviceFixtureStore deviceStore() {
@@ -101,6 +112,10 @@ public final class HttpServerGateway implements ApiGateway {
 
     public InMemoryBehaviourLogStore behaviourLog() {
         return behaviourLog;
+    }
+
+    public RoutineCatalog routineCatalog() {
+        return routineCatalog;
     }
 
     /** F5.T2.S4 — blocks cloud paths when true. */
@@ -293,7 +308,7 @@ public final class HttpServerGateway implements ApiGateway {
             sendResponse(exchange, 405, "Method Not Allowed");
             return;
         }
-        sendJson(exchange, 200, ROUTINES_JSON);
+        sendJson(exchange, 200, routineCatalog.listSummariesJson());
     }
 
     private void handleProfiles(HttpExchange exchange) throws IOException {
