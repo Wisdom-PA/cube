@@ -1,10 +1,10 @@
 package wisdom.cube.voice;
 
-import wisdom.cube.core.AutomationEngine;
-
 import java.util.Locale;
 import java.util.Optional;
 import java.util.function.LongSupplier;
+
+import wisdom.cube.core.AutomationEngine;
 
 /**
  * Short-term follow-up resolution (F4.T3.S5): after a successful light automation, pronoun-style
@@ -17,7 +17,6 @@ public final class VoiceContextChain {
     private final LongSupplier epochMillis;
     private long lastSuccessEpochMs;
     private String lastRoomSlug;
-    private String lastIntentType;
     private String lastParameters;
 
     public VoiceContextChain() {
@@ -31,14 +30,12 @@ public final class VoiceContextChain {
     public void recordAutomationSuccess(AutomationEngine.Intent intent) {
         lastSuccessEpochMs = epochMillis.getAsLong();
         lastRoomSlug = intent.targets();
-        lastIntentType = intent.type();
         lastParameters = intent.parameters();
     }
 
     public void clear() {
         lastSuccessEpochMs = 0L;
         lastRoomSlug = null;
-        lastIntentType = null;
         lastParameters = null;
     }
 
