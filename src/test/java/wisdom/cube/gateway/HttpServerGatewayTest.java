@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import wisdom.cube.device.InMemoryLightDeviceRegistry;
 import wisdom.cube.device.NoOpDeviceDiscoveryService;
 import wisdom.cube.logging.InMemoryBehaviourLogStore;
+import wisdom.cube.profile.FixtureProfileStore;
 import wisdom.cube.routine.FixtureRoutineCatalog;
 import wisdom.cube.routine.RoutineActionKind;
 import wisdom.cube.routine.RoutineDefinition;
@@ -440,7 +441,8 @@ class HttpServerGatewayTest {
             new NoOpDeviceDiscoveryService(),
             0L,
             null,
-            600L
+            600L,
+            null
         );
         gateway.start();
         gateway.stop();
@@ -801,7 +803,8 @@ class HttpServerGatewayTest {
             new NoOpDeviceDiscoveryService(),
             0L,
             new FixtureRoutineCatalog(),
-            0L
+            0L,
+            null
         );
         gateway.start();
         int port = gateway.getPort();
@@ -814,5 +817,82 @@ class HttpServerGatewayTest {
         HttpResponse<String> res = client.send(patch, HttpResponse.BodyHandlers.ofString());
         assertEquals(501, res.statusCode());
         assertTrue(res.body().contains("ROUTINE_PATCH_UNSUPPORTED"));
+    }
+
+    @Test
+    void patchProfileDisplayNameUpdatesList() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest patch = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/profiles/p1"))
+            .method("PATCH", HttpRequest.BodyPublishers.ofString("{\"display_name\":\"Household lead\"}"))
+            .header("Content-Type", "application/json")
+            .build();
+        HttpResponse<String> res = client.send(patch, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, res.statusCode());
+        assertTrue(res.body().contains("Household lead"));
+        HttpResponse<String> list = client.send(
+            HttpRequest.newBuilder().uri(URI.create("http://127.0.0.1:" + port + "/profiles")).GET().build(),
+            HttpResponse.BodyHandlers.ofString());
+        assertTrue(list.body().contains("Household lead"));
+    }
+
+    @Test
+    void patchProfileUnknownReturns404() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest patch = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/profiles/unknown"))
+            .method("PATCH", HttpRequest.BodyPublishers.ofString("{\"display_name\":\"X\"}"))
+            .header("Content-Type", "application/json")
+            .build();
+        HttpResponse<String> res = client.send(patch, HttpResponse.BodyHandlers.ofString());
+        assertEquals(404, res.statusCode());
+        assertTrue(res.body().contains("PROFILE_NOT_FOUND"));
+    }
+
+    @Test
+    void patchProfileOnFixtureStoreReturns501() throws Exception {
+        InMemoryBehaviourLogStore log = new InMemoryBehaviourLogStore();
+        DeviceFixtureStore ds = new DeviceFixtureStore(new InMemoryLightDeviceRegistry());
+        gateway = new HttpServerGateway(
+            0,
+            Executors.newSingleThreadExecutor(),
+            log,
+            ds,
+            new NoOpDeviceDiscoveryService(),
+            0L,
+            null,
+            0L,
+            new FixtureProfileStore()
+        );
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest patch = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/profiles/p1"))
+            .method("PATCH", HttpRequest.BodyPublishers.ofString("{\"display_name\":\"X\"}"))
+            .header("Content-Type", "application/json")
+            .build();
+        HttpResponse<String> res = client.send(patch, HttpResponse.BodyHandlers.ofString());
+        assertEquals(501, res.statusCode());
+        assertTrue(res.body().contains("PROFILE_PATCH_UNSUPPORTED"));
+    }
+
+    @Test
+    void postProfilesReturns405() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest post = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/profiles"))
+            .POST(HttpRequest.BodyPublishers.noBody())
+            .build();
+        assertEquals(405, client.send(post, HttpResponse.BodyHandlers.ofString()).statusCode());
     }
 }

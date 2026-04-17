@@ -22,6 +22,9 @@ import wisdom.cube.device.InMemoryLightDeviceRegistry;
 import wisdom.cube.device.LightDevice;
 import wisdom.cube.device.NoOpDeviceDiscoveryService;
 import wisdom.cube.logging.InMemoryBehaviourLogStore;
+import wisdom.cube.profile.MutableProfileStore;
+import wisdom.cube.profile.ProfileEntry;
+import wisdom.cube.profile.ProfileStore;
 import wisdom.cube.routine.MutableRoutineCatalog;
 import wisdom.cube.routine.RoutineCatalog;
 import wisdom.cube.routine.RoutineDefinition;
@@ -38,11 +41,8 @@ public final class HttpServerGateway implements ApiGateway {
         "\"message\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
     private static final Pattern ROUTINE_NAME_PATCH_FIELD = Pattern.compile(
         "\"name\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
-
-    private static final String PROFILES_JSON = "{\"profiles\":["
-        + "{\"id\":\"p1\",\"role\":\"adult\",\"display_name\":\"Adult\"},"
-        + "{\"id\":\"p2\",\"role\":\"guest\",\"display_name\":\"Guest\"}"
-        + "]}";
+    private static final Pattern PROFILE_DISPLAY_NAME_PATCH_FIELD = Pattern.compile(
+        "\"display_name\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
 
     private static final byte[] BACKUP_BYTES = "WISDOM-BACKUP-v0\n".getBytes(StandardCharsets.UTF_8);
 
@@ -58,6 +58,7 @@ public final class HttpServerGateway implements ApiGateway {
     private final long deviceHealthPeriodSeconds;
     private final RoutineCatalog routineCatalog;
     private final long routineTickPeriodSeconds;
+    private final ProfileStore profileStore;
     private DeviceHealthScheduler deviceHealthScheduler;
     private RoutineTickScheduler routineTickScheduler;
 
@@ -66,14 +67,14 @@ public final class HttpServerGateway implements ApiGateway {
     }
 
     public HttpServerGateway(int port, Executor executor, InMemoryBehaviourLogStore behaviourLog) {
-        this(port, executor, behaviourLog, defaultDeviceStore(), new NoOpDeviceDiscoveryService(), 0L, null, 0L);
+        this(port, executor, behaviourLog, defaultDeviceStore(), new NoOpDeviceDiscoveryService(), 0L, null, 0L, null);
     }
 
     /**
      * Shares {@link DeviceFixtureStore} and log with other cube subsystems (e.g. {@link wisdom.cube.voice.VoicePipelineFactory}).
      */
     public HttpServerGateway(int port, Executor executor, InMemoryBehaviourLogStore behaviourLog, DeviceFixtureStore deviceStore) {
-        this(port, executor, behaviourLog, deviceStore, new NoOpDeviceDiscoveryService(), 0L, null, 0L);
+        this(port, executor, behaviourLog, deviceStore, new NoOpDeviceDiscoveryService(), 0L, null, 0L, null);
     }
 
     public HttpServerGateway(
@@ -83,7 +84,7 @@ public final class HttpServerGateway implements ApiGateway {
         DeviceFixtureStore deviceStore,
         DeviceDiscoveryService deviceDiscovery
     ) {
-        this(port, executor, behaviourLog, deviceStore, deviceDiscovery, 0L, null, 0L);
+        this(port, executor, behaviourLog, deviceStore, deviceDiscovery, 0L, null, 0L, null);
     }
 
     public HttpServerGateway(
@@ -94,7 +95,7 @@ public final class HttpServerGateway implements ApiGateway {
         DeviceDiscoveryService deviceDiscovery,
         long deviceHealthPeriodSeconds
     ) {
-        this(port, executor, behaviourLog, deviceStore, deviceDiscovery, deviceHealthPeriodSeconds, null, 0L);
+        this(port, executor, behaviourLog, deviceStore, deviceDiscovery, deviceHealthPeriodSeconds, null, 0L, null);
     }
 
     public HttpServerGateway(
@@ -106,7 +107,7 @@ public final class HttpServerGateway implements ApiGateway {
         long deviceHealthPeriodSeconds,
         RoutineCatalog routineCatalog
     ) {
-        this(port, executor, behaviourLog, deviceStore, deviceDiscovery, deviceHealthPeriodSeconds, routineCatalog, 0L);
+        this(port, executor, behaviourLog, deviceStore, deviceDiscovery, deviceHealthPeriodSeconds, routineCatalog, 0L, null);
     }
 
     public HttpServerGateway(
@@ -119,6 +120,30 @@ public final class HttpServerGateway implements ApiGateway {
         RoutineCatalog routineCatalog,
         long routineTickPeriodSeconds
     ) {
+        this(
+            port,
+            executor,
+            behaviourLog,
+            deviceStore,
+            deviceDiscovery,
+            deviceHealthPeriodSeconds,
+            routineCatalog,
+            routineTickPeriodSeconds,
+            null
+        );
+    }
+
+    public HttpServerGateway(
+        int port,
+        Executor executor,
+        InMemoryBehaviourLogStore behaviourLog,
+        DeviceFixtureStore deviceStore,
+        DeviceDiscoveryService deviceDiscovery,
+        long deviceHealthPeriodSeconds,
+        RoutineCatalog routineCatalog,
+        long routineTickPeriodSeconds,
+        ProfileStore profileStore
+    ) {
         this.port = port;
         this.executor = executor != null ? executor : Runnable::run;
         this.behaviourLog = behaviourLog;
@@ -127,6 +152,7 @@ public final class HttpServerGateway implements ApiGateway {
         this.deviceHealthPeriodSeconds = Math.max(0L, deviceHealthPeriodSeconds);
         this.routineCatalog = routineCatalog != null ? routineCatalog : new MutableRoutineCatalog();
         this.routineTickPeriodSeconds = Math.max(0L, routineTickPeriodSeconds);
+        this.profileStore = profileStore != null ? profileStore : new MutableProfileStore();
     }
 
     public DeviceFixtureStore deviceStore() {
@@ -139,6 +165,10 @@ public final class HttpServerGateway implements ApiGateway {
 
     public RoutineCatalog routineCatalog() {
         return routineCatalog;
+    }
+
+    public ProfileStore profileStore() {
+        return profileStore;
     }
 
     /** F5.T2.S4 — blocks cloud paths when true. */
@@ -445,11 +475,58 @@ public final class HttpServerGateway implements ApiGateway {
     }
 
     private void handleProfiles(HttpExchange exchange) throws IOException {
-        if (!"GET".equals(exchange.getRequestMethod())) {
+        String rawPath = exchange.getRequestURI().getPath();
+        String path = normalizePath(rawPath);
+        String method = exchange.getRequestMethod();
+        if ("/profiles".equals(path)) {
+            if ("GET".equals(method)) {
+                sendJson(exchange, 200, profileStore.listProfilesJson());
+                return;
+            }
             sendResponse(exchange, 405, "Method Not Allowed");
             return;
         }
-        sendJson(exchange, 200, PROFILES_JSON);
+        if (!path.startsWith("/profiles/")) {
+            sendResponse(exchange, 404, "Not Found");
+            return;
+        }
+        String profileIdRaw = path.substring("/profiles/".length());
+        if (profileIdRaw.isEmpty() || profileIdRaw.indexOf('/') >= 0) {
+            sendResponse(exchange, 404, "Not Found");
+            return;
+        }
+        final String profileId = URLDecoder.decode(profileIdRaw, StandardCharsets.UTF_8);
+        if ("PATCH".equals(method)) {
+            String body = readBody(exchange);
+            String newName = extractProfileDisplayNamePatch(body);
+            if (newName == null || newName.isBlank()) {
+                sendJson(exchange, 400, ProfileApiErrors.profilePatchInvalidJson());
+                return;
+            }
+            Optional<ProfileEntry> updated = profileStore.patchDisplayName(profileId, newName.trim());
+            if (updated.isPresent()) {
+                sendJson(exchange, 200, MutableProfileStore.toSummaryJson(updated.get()));
+                return;
+            }
+            if (!profileStore.profileExists(profileId)) {
+                sendJson(exchange, 404, ProfileApiErrors.profileNotFoundJson());
+                return;
+            }
+            sendJson(exchange, 501, ProfileApiErrors.profilePatchUnsupportedJson());
+            return;
+        }
+        sendResponse(exchange, 405, "Method Not Allowed");
+    }
+
+    private static String extractProfileDisplayNamePatch(String body) {
+        if (body == null || body.isBlank()) {
+            return null;
+        }
+        Matcher m = PROFILE_DISPLAY_NAME_PATCH_FIELD.matcher(body);
+        if (!m.find()) {
+            return null;
+        }
+        return ConfigBodyParser.jsonUnescape(m.group(1));
     }
 
     private void handleLogs(HttpExchange exchange) throws IOException {
