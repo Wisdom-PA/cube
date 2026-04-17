@@ -12,8 +12,9 @@ class DeviceHealthSchedulerTest {
 
     @Test
     void rejectsNonPositivePeriod() {
-        assertThrows(IllegalArgumentException.class, () ->
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
             new DeviceHealthScheduler(new NoOpDeviceDiscoveryService(), new InMemoryLightDeviceRegistry(), 0, TimeUnit.SECONDS));
+        assertTrue(ex.getMessage().contains("period"), ex.getMessage());
     }
 
     @Test
