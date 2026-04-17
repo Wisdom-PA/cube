@@ -88,6 +88,20 @@ public final class HttpServerGateway implements ApiGateway {
         return behaviourLog;
     }
 
+    /** F5.T2.S4 — blocks cloud paths when true. */
+    public boolean isGlobalOffline() {
+        synchronized (configLock) {
+            return config.globalOffline;
+        }
+    }
+
+    /** {@code paranoid} or {@code normal}; drives cloud allow in {@link wisdom.cube.internet.DefaultInternetAccessGate}. */
+    public String getDefaultPrivacyMode() {
+        synchronized (configLock) {
+            return config.defaultPrivacyMode;
+        }
+    }
+
     @Override
     public void start() {
         if (server != null) {
