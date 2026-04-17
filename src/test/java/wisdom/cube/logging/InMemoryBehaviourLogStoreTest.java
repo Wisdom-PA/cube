@@ -10,6 +10,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 import wisdom.cube.core.AutomationEngine;
+import wisdom.cube.routine.RoutineActionKind;
+import wisdom.cube.routine.RoutineDefinition;
+import wisdom.cube.routine.RoutineStepResult;
 
 class InMemoryBehaviourLogStoreTest {
 
@@ -42,6 +45,30 @@ class InMemoryBehaviourLogStoreTest {
         String json = store.toLogQueryJson();
         assertTrue(json.contains("hello cube"));
         assertTrue(json.contains("chat.message"));
+    }
+
+    @Test
+    void recordRoutineRunProducesTimerIntentAndStepActions() {
+        InMemoryBehaviourLogStore store = emptyStore();
+        RoutineDefinition def = new RoutineDefinition(
+            "r1",
+            "Test routine",
+            "p1",
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of()
+        );
+        List<RoutineStepResult> steps = List.of(
+            new RoutineStepResult(0, RoutineActionKind.NOTIFICATION, true, "notification_stub", null, null),
+            new RoutineStepResult(1, RoutineActionKind.DEVICE_STATE, false, "x", "NOT_FOUND", "Unknown device")
+        );
+        store.recordRoutineRun(def, steps);
+        String json = store.toLogQueryJson();
+        assertTrue(json.contains("routine.timer"));
+        assertTrue(json.contains("Test routine"));
+        assertTrue(json.contains("NOTIFICATION"));
+        assertTrue(json.contains("NOT_FOUND"));
     }
 
     @Test

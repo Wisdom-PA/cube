@@ -1,22 +1,34 @@
-# F6 — Routines: data model (scaffold, F6.T4.S1)
+# F6 — Routines: model, tick scheduler, execution, logging (F6.T4.S1–S4)
 
-This document and the `wisdom.cube.routine` package capture the **routine definition shape** before the scheduler, execution graph, and inspection APIs land (F6.T4.S2–S4, F6.T5).
+## Model (S1)
 
-## Model (Java)
+- **`RoutineDefinition`**: `routineId`, `name`, `ownerProfileId`, `editorProfileIds`, `triggers`, `conditions`, `actions`.
+- **`RoutineTrigger`** + **`RoutineTriggerKind`**: `TIME`, `SUN`, `DEVICE_EVENT`, `VOICE_PHRASE`, `PRESENCE` with opaque `payload` (cron-like for `TIME`).
+- **`RoutineCondition`** + **`RoutineConditionKind`**: `TIME_WINDOW` (JSON `start` / `end` as `HH:mm`), `PRESENCE` / `DEVICE_STATE` (stubs: always pass).
+- **`RoutineAction`** + **`RoutineActionKind`**: `DEVICE_STATE` (JSON `device_id`, optional `power`, `brightness`), `DELAY` (stub: deferred, no real sleep), `NOTIFICATION` (stub).
 
-- **`RoutineDefinition`**: `routineId`, `name`, `ownerProfileId`, `editorProfileIds` (who may edit), `triggers`, `conditions`, `actions`.
-- **`RoutineTrigger`** + **`RoutineTriggerKind`**: `TIME`, `SUN`, `DEVICE_EVENT`, `VOICE_PHRASE`, `PRESENCE` with an opaque `payload` string (e.g. cron, phrase, device ref).
-- **`RoutineCondition`** + **`RoutineConditionKind`**: optional guards (`TIME_WINDOW`, `PRESENCE`, `DEVICE_STATE`) with payload.
-- **`RoutineAction`** + **`RoutineActionKind`**: `DEVICE_STATE`, `DELAY`, `NOTIFICATION` with payload (e.g. JSON for device patch, delay ms).
+## Tick scheduler (S2)
 
-## HTTP (current)
+- **`RoutineTickProcessor`**: on each tick, evaluates **TIME** triggers with **`RoutineCronEvaluator`** (`M H * * *` daily subset), then **`RoutineConditionEvaluator`**, then runs actions.
+- **`RoutineTickScheduler`**: daemon `scheduleAtFixedRate` (seconds in production; tests may use smaller `TimeUnit`).
+- **`HttpServerGateway`**: optional **`routineTickPeriodSeconds`** (`> 0` starts the scheduler). **`Cube`** reads **`CUBE_ROUTINE_TICK_SEC`** (unset or non-positive = off).
 
-- **`GET /routines`** still returns **`RoutineList`** (`id` + `name` per item) from `RoutineCatalog#listSummariesJson()`. Full definitions stay internal until contracts expose them.
+## Execution (S3)
+
+- **`RoutineRunner`**: runs actions **in order**; a failed step does not stop later steps (partial success). Device actions respect **`reachable`** on the registry.
+
+## Logging (S4)
+
+- **`InMemoryBehaviourLogStore.recordRoutineRun`**: one chain with intent type **`routine.timer`** and one **`ActionEntry`** per step (`ok` / `error` + codes). Surfaced via existing **`GET /logs`**.
+
+## HTTP (list only)
+
+- **`GET /routines`** returns **`RoutineList`** from **`RoutineCatalog#listSummariesJson()`** until contracts expose full definitions.
 
 ## Fixture
 
-- **`FixtureRoutineCatalog`** holds the two dev routines previously inlined in `HttpServerGateway`.
+- **`FixtureRoutineCatalog`**: two sample routines (evening 18:00; morning 07:00 with time window).
 
 ## Traceability
 
-- Tickets: **F6.T4.S1**
+- Tickets: **F6.T4.S1–S4** (F6.T5 inspection APIs still follow-on).

@@ -67,6 +67,21 @@ public final class Cube {
         }
     }
 
+    /**
+     * Interval in seconds for routine time-trigger evaluation (F6.T4.S2). Unset or non-positive disables.
+     */
+    static long resolveRoutineTickPeriodSeconds(String envCubeRoutineTickSec) {
+        if (envCubeRoutineTickSec == null || envCubeRoutineTickSec.isBlank()) {
+            return 0L;
+        }
+        try {
+            long v = Long.parseLong(envCubeRoutineTickSec.trim());
+            return v > 0L ? v : 0L;
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid CUBE_ROUTINE_TICK_SEC: " + envCubeRoutineTickSec, e);
+        }
+    }
+
     private static void runGatewayBlocking(int requestedPort) {
         ExecutorService pool = Executors.newCachedThreadPool(r -> {
             Thread t = new Thread(r, "cube-http");
@@ -76,13 +91,16 @@ public final class Cube {
         InMemoryBehaviourLogStore behaviourLog = new InMemoryBehaviourLogStore();
         DeviceFixtureStore deviceStore = new DeviceFixtureStore(new InMemoryLightDeviceRegistry());
         long healthSec = resolveDeviceHealthPeriodSeconds(System.getenv("CUBE_DEVICE_HEALTH_SEC"));
+        long routineTickSec = resolveRoutineTickPeriodSeconds(System.getenv("CUBE_ROUTINE_TICK_SEC"));
         HttpServerGateway gateway = new HttpServerGateway(
             requestedPort,
             pool,
             behaviourLog,
             deviceStore,
             new NoOpDeviceDiscoveryService(),
-            healthSec
+            healthSec,
+            null,
+            routineTickSec
         );
         gateway.start();
         int bound = gateway.getPort();

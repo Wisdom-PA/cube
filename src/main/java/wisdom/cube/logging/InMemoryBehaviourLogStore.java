@@ -1,6 +1,8 @@
 package wisdom.cube.logging;
 
 import wisdom.cube.core.AutomationEngine;
+import wisdom.cube.routine.RoutineDefinition;
+import wisdom.cube.routine.RoutineStepResult;
 import wisdom.cube.util.JsonStrings;
 
 import java.time.Instant;
@@ -142,6 +144,51 @@ public final class InMemoryBehaviourLogStore implements BehaviourLogWriter {
             result.success() ? null : result.errorCode(),
             result.success() ? null : result.errorMessage()
         ));
+    }
+
+    /**
+     * Records one closed chain for a scheduled routine run (F6.T4.S4).
+     */
+    public void recordRoutineRun(RoutineDefinition routine, List<RoutineStepResult> steps) {
+        UUID chainId = UUID.randomUUID();
+        Instant now = Instant.now();
+        String owner = routine.ownerProfileId() == null ? "unknown" : routine.ownerProfileId();
+        String rid = routine.routineId() == null ? "" : routine.routineId();
+        String rname = routine.name() == null ? "" : routine.name();
+        writeChainSummary(new BehaviourLogSchema.ChainSummary(
+            chainId,
+            "cube",
+            now,
+            Optional.of(now),
+            owner,
+            now,
+            owner,
+            List.of()
+        ));
+        writeIntent(new BehaviourLogSchema.IntentEntry(
+            chainId,
+            0,
+            now,
+            "Routine timer: " + rname,
+            "routine.timer",
+            rid,
+            "triggers=" + routine.triggers().size() + ",actions=" + routine.actions().size(),
+            owner
+        ));
+        int ai = 0;
+        for (RoutineStepResult s : steps) {
+            writeAction(new BehaviourLogSchema.ActionEntry(
+                chainId,
+                ai,
+                0,
+                now,
+                truncate(s.kind() + " " + s.summary(), 500),
+                s.success() ? "ok" : "error",
+                s.success() ? null : s.errorCode(),
+                s.success() ? null : s.errorMessage()
+            ));
+            ai++;
+        }
     }
 
     /**
