@@ -4,6 +4,7 @@ import java.util.List;
 
 /**
  * Dev fixture routines aligned with the previous static {@code /routines} payload (F6.T4.S1 scaffold).
+ * Immutable; {@link #patchRoutineDisplayName} is not supported (use {@link MutableRoutineCatalog}).
  */
 public final class FixtureRoutineCatalog implements RoutineCatalog {
 

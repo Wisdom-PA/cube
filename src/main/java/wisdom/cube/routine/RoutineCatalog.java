@@ -1,6 +1,7 @@
 package wisdom.cube.routine;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * In-memory view of routines for the HTTP API and future engine (F6.T4).
@@ -8,6 +9,13 @@ import java.util.List;
 public interface RoutineCatalog {
 
     List<RoutineDefinition> definitions();
+
+    /**
+     * Updates display name when supported (F6.T5). Default: not supported.
+     */
+    default Optional<RoutineDefinition> patchRoutineDisplayName(String routineId, String newName) {
+        return Optional.empty();
+    }
 
     /**
      * {@code RoutineList} body per {@code openapi/cube-app.yaml} (id + name only per entry).

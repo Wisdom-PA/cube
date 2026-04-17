@@ -21,14 +21,17 @@
 
 - **`InMemoryBehaviourLogStore.recordRoutineRun`**: one chain with intent type **`routine.timer`** and one **`ActionEntry`** per step (`ok` / `error` + codes). Surfaced via existing **`GET /logs`**.
 
-## HTTP (list only)
+## HTTP
 
-- **`GET /routines`** returns **`RoutineList`** from **`RoutineCatalog#listSummariesJson()`** until contracts expose full definitions.
+- **`GET /routines`**: **`RoutineList`** from **`RoutineCatalog#listSummariesJson()`**.
+- **`GET /routines/history`**: **`RoutineRunHistory`** (newest first) from **`InMemoryBehaviourLogStore#toRoutineRunHistoryJson`**, fed whenever **`recordRoutineRun`** runs.
+- **`PATCH /routines/{routineId}`** with **`{"name":"…"}`**: updates display name when the catalog supports it (**`MutableRoutineCatalog`** is the default in **`HttpServerGateway`**); read-only **`FixtureRoutineCatalog`** returns **501**.
 
-## Fixture
+## Catalogs
 
-- **`FixtureRoutineCatalog`**: two sample routines (evening 18:00; morning 07:00 with time window).
+- **`FixtureRoutineCatalog`**: two sample routines (evening 18:00; morning 07:00 with time window); immutable.
+- **`MutableRoutineCatalog`**: same starting data; supports **`patchRoutineDisplayName`** for companion sync (F6.T5).
 
 ## Traceability
 
-- Tickets: **F6.T4.S1–S4** (F6.T5 inspection APIs still follow-on).
+- Tickets: **F6.T4.S1–S4**; **F6.T5** history + name patch + app wiring.

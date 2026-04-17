@@ -5,6 +5,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.concurrent.Executors;
 
 import org.junit.jupiter.api.AfterEach;
@@ -18,6 +19,10 @@ import org.junit.jupiter.api.Test;
 import wisdom.cube.device.InMemoryLightDeviceRegistry;
 import wisdom.cube.device.NoOpDeviceDiscoveryService;
 import wisdom.cube.logging.InMemoryBehaviourLogStore;
+import wisdom.cube.routine.FixtureRoutineCatalog;
+import wisdom.cube.routine.RoutineActionKind;
+import wisdom.cube.routine.RoutineDefinition;
+import wisdom.cube.routine.RoutineStepResult;
 
 class HttpServerGatewayTest {
 
@@ -629,5 +634,185 @@ class HttpServerGatewayTest {
         assertEquals(200, response.statusCode());
         assertTrue(response.body().contains("On-device (stub):"));
         assertTrue(response.body().contains("hi"));
+    }
+
+    @Test
+    void getRoutinesHistoryReturnsRunsArray() throws Exception {
+        InMemoryBehaviourLogStore log = new InMemoryBehaviourLogStore();
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor(), log);
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpResponse<String> empty = client.send(
+            HttpRequest.newBuilder()
+                .uri(URI.create("http://127.0.0.1:" + port + "/routines/history"))
+                .GET()
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, empty.statusCode());
+        assertTrue(empty.body().contains("\"runs\":[]"));
+
+        log.recordRoutineRun(
+            new RoutineDefinition("r1", "Evening", "p1", List.of(), List.of(), List.of(), List.of()),
+            List.of(
+                new RoutineStepResult(0, RoutineActionKind.DEVICE_STATE, true, "ok", null, null)
+            )
+        );
+        HttpResponse<String> withRuns = client.send(
+            HttpRequest.newBuilder()
+                .uri(URI.create("http://127.0.0.1:" + port + "/routines/history?limit=5"))
+                .GET()
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, withRuns.statusCode());
+        assertTrue(withRuns.body().contains("\"routine_id\":\"r1\""));
+        assertTrue(withRuns.body().contains("\"ok\":true"));
+    }
+
+    @Test
+    void patchRoutineNameUpdatesList() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest patch = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/routines/r1"))
+            .method("PATCH", HttpRequest.BodyPublishers.ofString("{\"name\":\"Sunset\"}"))
+            .header("Content-Type", "application/json")
+            .build();
+        HttpResponse<String> res = client.send(patch, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, res.statusCode());
+        assertTrue(res.body().contains("\"id\":\"r1\""));
+        assertTrue(res.body().contains("Sunset"));
+        HttpResponse<String> list = client.send(
+            HttpRequest.newBuilder().uri(URI.create("http://127.0.0.1:" + port + "/routines")).GET().build(),
+            HttpResponse.BodyHandlers.ofString());
+        assertTrue(list.body().contains("Sunset"));
+    }
+
+    @Test
+    void patchRoutineUnknownReturns404() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest patch = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/routines/unknown"))
+            .method("PATCH", HttpRequest.BodyPublishers.ofString("{\"name\":\"X\"}"))
+            .header("Content-Type", "application/json")
+            .build();
+        HttpResponse<String> res = client.send(patch, HttpResponse.BodyHandlers.ofString());
+        assertEquals(404, res.statusCode());
+        assertTrue(res.body().contains("ROUTINE_NOT_FOUND"));
+    }
+
+    @Test
+    void postRoutinesHistoryReturns405() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest post = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/routines/history"))
+            .POST(HttpRequest.BodyPublishers.noBody())
+            .build();
+        assertEquals(405, client.send(post, HttpResponse.BodyHandlers.ofString()).statusCode());
+    }
+
+    @Test
+    void postRoutinesListReturns405() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest post = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/routines"))
+            .POST(HttpRequest.BodyPublishers.noBody())
+            .build();
+        assertEquals(405, client.send(post, HttpResponse.BodyHandlers.ofString()).statusCode());
+    }
+
+    @Test
+    void getRoutinesSubPathWithSlashReturns404() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest get = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/routines/r1/extra"))
+            .GET()
+            .build();
+        assertEquals(404, client.send(get, HttpResponse.BodyHandlers.ofString()).statusCode());
+    }
+
+    @Test
+    void getRoutinesByIdReturns405() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest get = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/routines/r1"))
+            .GET()
+            .build();
+        assertEquals(405, client.send(get, HttpResponse.BodyHandlers.ofString()).statusCode());
+    }
+
+    @Test
+    void patchRoutineMissingNameReturns400() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest patch = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/routines/r1"))
+            .method("PATCH", HttpRequest.BodyPublishers.ofString("{}"))
+            .header("Content-Type", "application/json")
+            .build();
+        HttpResponse<String> res = client.send(patch, HttpResponse.BodyHandlers.ofString());
+        assertEquals(400, res.statusCode());
+        assertTrue(res.body().contains("ROUTINE_PATCH_INVALID"));
+    }
+
+    @Test
+    void getRoutinesHistoryToleratesBadLimitQuery() throws Exception {
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest get = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/routines/history?limit=not-a-number"))
+            .GET()
+            .build();
+        HttpResponse<String> res = client.send(get, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, res.statusCode());
+        assertTrue(res.body().contains("\"runs\""));
+    }
+
+    @Test
+    void patchRoutineOnFixtureCatalogReturns501() throws Exception {
+        InMemoryBehaviourLogStore log = new InMemoryBehaviourLogStore();
+        DeviceFixtureStore ds = new DeviceFixtureStore(new InMemoryLightDeviceRegistry());
+        gateway = new HttpServerGateway(
+            0,
+            Executors.newSingleThreadExecutor(),
+            log,
+            ds,
+            new NoOpDeviceDiscoveryService(),
+            0L,
+            new FixtureRoutineCatalog(),
+            0L
+        );
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest patch = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/routines/r1"))
+            .method("PATCH", HttpRequest.BodyPublishers.ofString("{\"name\":\"X\"}"))
+            .header("Content-Type", "application/json")
+            .build();
+        HttpResponse<String> res = client.send(patch, HttpResponse.BodyHandlers.ofString());
+        assertEquals(501, res.statusCode());
+        assertTrue(res.body().contains("ROUTINE_PATCH_UNSUPPORTED"));
     }
 }

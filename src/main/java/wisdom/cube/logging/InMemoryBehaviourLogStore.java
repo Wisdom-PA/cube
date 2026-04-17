@@ -23,10 +23,14 @@ public final class InMemoryBehaviourLogStore implements BehaviourLogWriter {
     private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_INSTANT;
 
     private final Object lock = new Object();
+    private static final int MAX_ROUTINE_RUN_HISTORY = 500;
+
     private final List<BehaviourLogSchema.ChainSummary> summaries = new ArrayList<>();
     private final List<BehaviourLogSchema.IntentEntry> intents = new ArrayList<>();
     private final List<BehaviourLogSchema.ActionEntry> actions = new ArrayList<>();
     private final List<BehaviourLogSchema.InternetCallEntry> internetCalls = new ArrayList<>();
+    /** Newest first; capped for inspection API (F6.T5). */
+    private final List<RoutineRunSnapshot> routineRuns = new ArrayList<>();
 
     @Override
     public void writeChainSummary(BehaviourLogSchema.ChainSummary summary) {
@@ -188,6 +192,130 @@ public final class InMemoryBehaviourLogStore implements BehaviourLogWriter {
                 s.success() ? null : s.errorMessage()
             ));
             ai++;
+        }
+        boolean allOk = steps.stream().allMatch(RoutineStepResult::success);
+        List<RoutineRunStepSnapshot> snapSteps = new ArrayList<>(steps.size());
+        for (RoutineStepResult s : steps) {
+            snapSteps.add(new RoutineRunStepSnapshot(
+                s.stepIndex(),
+                String.valueOf(s.kind()),
+                s.success(),
+                s.summary() == null ? "" : s.summary(),
+                s.errorCode(),
+                s.errorMessage()
+            ));
+        }
+        RoutineRunSnapshot snap = new RoutineRunSnapshot(
+            chainId,
+            now,
+            rid,
+            rname,
+            allOk,
+            List.copyOf(snapSteps)
+        );
+        synchronized (lock) {
+            routineRuns.add(0, snap);
+            while (routineRuns.size() > MAX_ROUTINE_RUN_HISTORY) {
+                routineRuns.remove(routineRuns.size() - 1);
+            }
+        }
+    }
+
+    /**
+     * JSON for {@code GET /routines/history}: newest runs first, up to {@code limit} entries.
+     */
+    public String toRoutineRunHistoryJson(int limit) {
+        int cap = Math.max(1, Math.min(limit, MAX_ROUTINE_RUN_HISTORY));
+        synchronized (lock) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("{\"runs\":[");
+            int n = Math.min(cap, routineRuns.size());
+            boolean first = true;
+            for (int i = 0; i < n; i++) {
+                if (!first) {
+                    sb.append(',');
+                }
+                first = false;
+                appendRoutineRunJson(sb, routineRuns.get(i));
+            }
+            sb.append("]}");
+            return sb.toString();
+        }
+    }
+
+    private static void appendRoutineRunJson(StringBuilder sb, RoutineRunSnapshot r) {
+        sb.append("{\"run_id\":\"").append(r.runId).append("\",");
+        sb.append("\"at\":\"").append(ISO.format(r.at)).append("\",");
+        sb.append("\"routine_id\":\"").append(JsonStrings.escape(r.routineId)).append("\",");
+        sb.append("\"routine_name\":\"").append(JsonStrings.escape(r.routineName)).append("\",");
+        sb.append("\"ok\":").append(r.allStepsOk).append(',');
+        sb.append("\"steps\":[");
+        boolean fs = true;
+        for (RoutineRunStepSnapshot s : r.steps) {
+            if (!fs) {
+                sb.append(',');
+            }
+            fs = false;
+            sb.append("{\"index\":").append(s.index).append(',');
+            sb.append("\"kind\":\"").append(JsonStrings.escape(s.kind)).append("\",");
+            sb.append("\"summary\":\"").append(JsonStrings.escape(s.summary)).append("\",");
+            sb.append("\"ok\":").append(s.ok).append(',');
+            sb.append("\"error_code\":");
+            appendJsonNullableString(sb, s.errorCode);
+            sb.append(",\"error_message\":");
+            appendJsonNullableString(sb, s.errorMessage);
+            sb.append('}');
+        }
+        sb.append("]}");
+    }
+
+    private static final class RoutineRunSnapshot {
+        private final UUID runId;
+        private final Instant at;
+        private final String routineId;
+        private final String routineName;
+        private final boolean allStepsOk;
+        private final List<RoutineRunStepSnapshot> steps;
+
+        private RoutineRunSnapshot(
+            UUID runId,
+            Instant at,
+            String routineId,
+            String routineName,
+            boolean allStepsOk,
+            List<RoutineRunStepSnapshot> steps
+        ) {
+            this.runId = runId;
+            this.at = at;
+            this.routineId = routineId;
+            this.routineName = routineName;
+            this.allStepsOk = allStepsOk;
+            this.steps = steps;
+        }
+    }
+
+    private static final class RoutineRunStepSnapshot {
+        private final int index;
+        private final String kind;
+        private final boolean ok;
+        private final String summary;
+        private final String errorCode;
+        private final String errorMessage;
+
+        private RoutineRunStepSnapshot(
+            int index,
+            String kind,
+            boolean ok,
+            String summary,
+            String errorCode,
+            String errorMessage
+        ) {
+            this.index = index;
+            this.kind = kind;
+            this.ok = ok;
+            this.summary = summary;
+            this.errorCode = errorCode;
+            this.errorMessage = errorMessage;
         }
     }
 
