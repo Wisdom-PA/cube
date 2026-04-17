@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.util.Optional;
@@ -21,8 +22,10 @@ import wisdom.cube.device.InMemoryLightDeviceRegistry;
 import wisdom.cube.device.LightDevice;
 import wisdom.cube.device.NoOpDeviceDiscoveryService;
 import wisdom.cube.logging.InMemoryBehaviourLogStore;
-import wisdom.cube.routine.FixtureRoutineCatalog;
+import wisdom.cube.routine.MutableRoutineCatalog;
 import wisdom.cube.routine.RoutineCatalog;
+import wisdom.cube.routine.RoutineDefinition;
+import wisdom.cube.routine.RoutineJson;
 import wisdom.cube.routine.RoutineTickScheduler;
 
 /**
@@ -33,6 +36,8 @@ public final class HttpServerGateway implements ApiGateway {
 
     private static final Pattern CHAT_MESSAGE_FIELD = Pattern.compile(
         "\"message\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
+    private static final Pattern ROUTINE_NAME_PATCH_FIELD = Pattern.compile(
+        "\"name\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
 
     private static final String PROFILES_JSON = "{\"profiles\":["
         + "{\"id\":\"p1\",\"role\":\"adult\",\"display_name\":\"Adult\"},"
@@ -120,7 +125,7 @@ public final class HttpServerGateway implements ApiGateway {
         this.deviceStore = deviceStore;
         this.deviceDiscovery = deviceDiscovery != null ? deviceDiscovery : new NoOpDeviceDiscoveryService();
         this.deviceHealthPeriodSeconds = Math.max(0L, deviceHealthPeriodSeconds);
-        this.routineCatalog = routineCatalog != null ? routineCatalog : new FixtureRoutineCatalog();
+        this.routineCatalog = routineCatalog != null ? routineCatalog : new MutableRoutineCatalog();
         this.routineTickPeriodSeconds = Math.max(0L, routineTickPeriodSeconds);
     }
 
@@ -336,11 +341,107 @@ public final class HttpServerGateway implements ApiGateway {
     }
 
     private void handleRoutines(HttpExchange exchange) throws IOException {
-        if (!"GET".equals(exchange.getRequestMethod())) {
+        String rawPath = exchange.getRequestURI().getPath();
+        String path = normalizePath(rawPath);
+        String method = exchange.getRequestMethod();
+        if ("/routines/history".equals(path)) {
+            if ("GET".equals(method)) {
+                int limit = parseQueryInt(exchange.getRequestURI().getRawQuery(), "limit", 50, 1, 200);
+                sendJson(exchange, 200, behaviourLog.toRoutineRunHistoryJson(limit));
+                return;
+            }
             sendResponse(exchange, 405, "Method Not Allowed");
             return;
         }
-        sendJson(exchange, 200, routineCatalog.listSummariesJson());
+        if ("/routines".equals(path)) {
+            if ("GET".equals(method)) {
+                sendJson(exchange, 200, routineCatalog.listSummariesJson());
+                return;
+            }
+            sendResponse(exchange, 405, "Method Not Allowed");
+            return;
+        }
+        if (!path.startsWith("/routines/")) {
+            sendResponse(exchange, 404, "Not Found");
+            return;
+        }
+        String routineIdRaw = path.substring("/routines/".length());
+        if (routineIdRaw.isEmpty() || routineIdRaw.indexOf('/') >= 0) {
+            sendResponse(exchange, 404, "Not Found");
+            return;
+        }
+        final String routineId = URLDecoder.decode(routineIdRaw, StandardCharsets.UTF_8);
+        if ("PATCH".equals(method)) {
+            String body = readBody(exchange);
+            String newName = extractRoutineNamePatch(body);
+            if (newName == null || newName.isBlank()) {
+                sendJson(exchange, 400, RoutineApiErrors.routinePatchInvalidJson());
+                return;
+            }
+            Optional<RoutineDefinition> updated =
+                routineCatalog.patchRoutineDisplayName(routineId, newName.trim());
+            if (updated.isPresent()) {
+                RoutineDefinition d = updated.get();
+                String json = "{\"id\":\"" + RoutineJson.escape(d.routineId()) + "\",\"name\":\""
+                    + RoutineJson.escape(d.name()) + "\"}";
+                sendJson(exchange, 200, json);
+                return;
+            }
+            boolean exists = routineCatalog.definitions().stream()
+                .anyMatch(d -> d.routineId().equals(routineId));
+            if (!exists) {
+                sendJson(exchange, 404, RoutineApiErrors.routineNotFoundJson());
+                return;
+            }
+            sendJson(exchange, 501, RoutineApiErrors.routinePatchUnsupportedJson());
+            return;
+        }
+        sendResponse(exchange, 405, "Method Not Allowed");
+    }
+
+    private static String normalizePath(String path) {
+        if (path == null || path.isEmpty()) {
+            return "";
+        }
+        if (path.length() > 1 && path.endsWith("/")) {
+            return path.substring(0, path.length() - 1);
+        }
+        return path;
+    }
+
+    private static int parseQueryInt(String rawQuery, String key, int defaultVal, int min, int max) {
+        if (rawQuery == null || rawQuery.isBlank()) {
+            return Math.min(Math.max(defaultVal, min), max);
+        }
+        for (String part : rawQuery.split("&")) {
+            int eq = part.indexOf('=');
+            if (eq <= 0) {
+                continue;
+            }
+            String k = URLDecoder.decode(part.substring(0, eq), StandardCharsets.UTF_8);
+            if (!key.equals(k)) {
+                continue;
+            }
+            String v = URLDecoder.decode(part.substring(eq + 1), StandardCharsets.UTF_8);
+            try {
+                int n = Integer.parseInt(v);
+                return Math.min(Math.max(n, min), max);
+            } catch (NumberFormatException e) {
+                return Math.min(Math.max(defaultVal, min), max);
+            }
+        }
+        return Math.min(Math.max(defaultVal, min), max);
+    }
+
+    private static String extractRoutineNamePatch(String body) {
+        if (body == null || body.isBlank()) {
+            return null;
+        }
+        Matcher m = ROUTINE_NAME_PATCH_FIELD.matcher(body);
+        if (!m.find()) {
+            return null;
+        }
+        return ConfigBodyParser.jsonUnescape(m.group(1));
     }
 
     private void handleProfiles(HttpExchange exchange) throws IOException {

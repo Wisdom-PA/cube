@@ -69,6 +69,20 @@ class InMemoryBehaviourLogStoreTest {
         assertTrue(json.contains("Test routine"));
         assertTrue(json.contains("NOTIFICATION"));
         assertTrue(json.contains("NOT_FOUND"));
+
+        String hist = store.toRoutineRunHistoryJson(10);
+        assertTrue(hist.contains("\"runs\":["));
+        assertTrue(hist.contains("\"routine_id\":\"r1\""));
+        assertTrue(hist.contains("\"ok\":false"));
+        assertTrue(hist.contains("\"kind\":\"NOTIFICATION\""));
+        assertTrue(hist.contains("\"kind\":\"DEVICE_STATE\""));
+        assertTrue(hist.contains("\"error_code\":\"NOT_FOUND\""));
+    }
+
+    @Test
+    void routineRunHistoryEmptyWhenNoRuns() {
+        InMemoryBehaviourLogStore store = emptyStore();
+        assertEquals("{\"runs\":[]}", store.toRoutineRunHistoryJson(50));
     }
 
     @Test
