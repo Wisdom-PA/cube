@@ -100,7 +100,8 @@ public final class Cube {
             new NoOpDeviceDiscoveryService(),
             healthSec,
             null,
-            routineTickSec
+            routineTickSec,
+            null
         );
         gateway.start();
         int bound = gateway.getPort();
