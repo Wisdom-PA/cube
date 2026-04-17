@@ -54,7 +54,8 @@ class AudioChunkAndBufferTest {
         c.discardPayload();
         assertEquals(0, c.byteLength());
         assertFalse(c.hasPayload());
-        assertThrows(IllegalStateException.class, c::data);
+        IllegalStateException ex = assertThrows(IllegalStateException.class, c::data);
+        assertEquals("audio payload discarded", ex.getMessage());
     }
 
     @Test

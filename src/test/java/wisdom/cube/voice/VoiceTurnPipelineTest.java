@@ -345,7 +345,7 @@ class VoiceTurnPipelineTest {
             new DefaultProfileInternetPolicy(),
             ref
         );
-        LlmService llm = new CloudFallbackLlmService(
+        LlmService cloudAwareLlm = new CloudFallbackLlmService(
             p -> Optional.of("on-device"),
             Optional.of(new StubCloudLlmClient("cloud-answer")),
             gate,
@@ -359,7 +359,7 @@ class VoiceTurnPipelineTest {
         VoiceTurnPipeline p = new VoiceTurnPipeline(
             stt,
             tts,
-            llm,
+            cloudAwareLlm,
             cl,
             new DialogueManager(),
             new InMemoryMemoryStore(),
@@ -385,7 +385,7 @@ class VoiceTurnPipelineTest {
             new DefaultProfileInternetPolicy(),
             ref
         );
-        LlmService llm = new CloudFallbackLlmService(
+        LlmService cloudAwareLlm = new CloudFallbackLlmService(
             p -> Optional.of("on-device"),
             Optional.of(new StubCloudLlmClient("cloud-answer")),
             gate,
@@ -399,7 +399,7 @@ class VoiceTurnPipelineTest {
         VoiceTurnPipeline p = new VoiceTurnPipeline(
             stt,
             tts,
-            llm,
+            cloudAwareLlm,
             cl,
             new DialogueManager(),
             new InMemoryMemoryStore(),
