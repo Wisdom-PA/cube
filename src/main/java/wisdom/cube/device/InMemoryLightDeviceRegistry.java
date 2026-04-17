@@ -47,14 +47,14 @@ public final class InMemoryLightDeviceRegistry implements LightDeviceRegistry {
     }
 
     /** Marks every device reachable or not (e.g. after a discovery / health sweep). */
-    public void refreshReachabilityAll(boolean reachable) {
+    public synchronized void refreshReachabilityAll(boolean reachable) {
         for (Mutable m : byId.values()) {
             m.reachable = reachable;
         }
     }
 
     @Override
-    public List<LightDevice> allInOrder() {
+    public synchronized List<LightDevice> allInOrder() {
         List<LightDevice> out = new ArrayList<>(byId.size());
         for (Mutable m : byId.values()) {
             out.add(m.snapshot());
@@ -63,18 +63,18 @@ public final class InMemoryLightDeviceRegistry implements LightDeviceRegistry {
     }
 
     @Override
-    public Optional<LightDevice> get(String id) {
+    public synchronized Optional<LightDevice> get(String id) {
         Mutable m = byId.get(id);
         return m == null ? Optional.empty() : Optional.of(m.snapshot());
     }
 
     @Override
-    public boolean contains(String id) {
+    public synchronized boolean contains(String id) {
         return id != null && byId.containsKey(id);
     }
 
     @Override
-    public void setPower(String id, boolean on) {
+    public synchronized void setPower(String id, boolean on) {
         Mutable m = byId.get(id);
         if (m != null) {
             m.power = on;
@@ -82,7 +82,7 @@ public final class InMemoryLightDeviceRegistry implements LightDeviceRegistry {
     }
 
     @Override
-    public void setBrightness(String id, double brightness) {
+    public synchronized void setBrightness(String id, double brightness) {
         Mutable m = byId.get(id);
         if (m != null) {
             m.brightness = clampUnit(brightness);
@@ -90,7 +90,7 @@ public final class InMemoryLightDeviceRegistry implements LightDeviceRegistry {
     }
 
     @Override
-    public void setReachable(String id, boolean reachable) {
+    public synchronized void setReachable(String id, boolean reachable) {
         Mutable m = byId.get(id);
         if (m != null) {
             m.reachable = reachable;
@@ -98,7 +98,7 @@ public final class InMemoryLightDeviceRegistry implements LightDeviceRegistry {
     }
 
     @Override
-    public Optional<String> firstLightIdInRoom(String roomSlug) {
+    public synchronized Optional<String> firstLightIdInRoom(String roomSlug) {
         if (roomSlug == null || roomSlug.isBlank()) {
             return Optional.empty();
         }

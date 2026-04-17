@@ -56,4 +56,25 @@ class CubeTest {
             Cube.resolveListenPort(new String[0], "bad"));
         assertTrue(assertInstanceOf(NumberFormatException.class, ex.getCause()).getMessage().contains("bad"));
     }
+
+    @Test
+    void resolveDeviceHealthPeriodSecondsUnsetOrNonPositiveIsZero() {
+        assertEquals(0L, Cube.resolveDeviceHealthPeriodSeconds(null));
+        assertEquals(0L, Cube.resolveDeviceHealthPeriodSeconds(""));
+        assertEquals(0L, Cube.resolveDeviceHealthPeriodSeconds("0"));
+        assertEquals(0L, Cube.resolveDeviceHealthPeriodSeconds("-1"));
+    }
+
+    @Test
+    void resolveDeviceHealthPeriodSecondsParsesPositive() {
+        assertEquals(120L, Cube.resolveDeviceHealthPeriodSeconds("120"));
+        assertEquals(60L, Cube.resolveDeviceHealthPeriodSeconds(" 60 "));
+    }
+
+    @Test
+    void resolveDeviceHealthPeriodSecondsRejectsInvalid() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
+            Cube.resolveDeviceHealthPeriodSeconds("x"));
+        assertTrue(assertInstanceOf(NumberFormatException.class, ex.getCause()).getMessage().contains("x"));
+    }
 }
