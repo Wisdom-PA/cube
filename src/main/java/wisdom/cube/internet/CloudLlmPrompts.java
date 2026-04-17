@@ -19,8 +19,10 @@ public final class CloudLlmPrompts {
         if (p.length() > 2_000) {
             p = p.substring(0, 2_000);
         }
-        return "Answer in one or two short neutral sentences suitable for text-to-speech. "
-            + "Do not invent device actions. If unsure, say you are unsure.\n\n"
-            + p;
+        return """
+            Answer in one or two short neutral sentences suitable for text-to-speech.
+            Do not invent device actions. If unsure, say you are unsure.
+
+            %s""".formatted(p);
     }
 }
