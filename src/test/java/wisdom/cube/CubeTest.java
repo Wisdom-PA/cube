@@ -77,4 +77,22 @@ class CubeTest {
             Cube.resolveDeviceHealthPeriodSeconds("x"));
         assertTrue(assertInstanceOf(NumberFormatException.class, ex.getCause()).getMessage().contains("x"));
     }
+
+    @Test
+    void resolveRoutineTickPeriodSecondsUnsetOrNonPositiveIsZero() {
+        assertEquals(0L, Cube.resolveRoutineTickPeriodSeconds(null));
+        assertEquals(0L, Cube.resolveRoutineTickPeriodSeconds("0"));
+    }
+
+    @Test
+    void resolveRoutineTickPeriodSecondsParsesPositive() {
+        assertEquals(120L, Cube.resolveRoutineTickPeriodSeconds("120"));
+    }
+
+    @Test
+    void resolveRoutineTickPeriodSecondsRejectsInvalid() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
+            Cube.resolveRoutineTickPeriodSeconds("nope"));
+        assertTrue(assertInstanceOf(NumberFormatException.class, ex.getCause()).getMessage().contains("nope"));
+    }
 }

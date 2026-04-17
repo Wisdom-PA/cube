@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.regex.Matcher;
@@ -22,6 +23,7 @@ import wisdom.cube.device.NoOpDeviceDiscoveryService;
 import wisdom.cube.logging.InMemoryBehaviourLogStore;
 import wisdom.cube.routine.FixtureRoutineCatalog;
 import wisdom.cube.routine.RoutineCatalog;
+import wisdom.cube.routine.RoutineTickScheduler;
 
 /**
  * Skeleton API gateway: JDK {@link HttpServer} implementing paths from {@code openapi/cube-app.yaml}
@@ -50,21 +52,23 @@ public final class HttpServerGateway implements ApiGateway {
     private final InMemoryBehaviourLogStore behaviourLog;
     private final long deviceHealthPeriodSeconds;
     private final RoutineCatalog routineCatalog;
+    private final long routineTickPeriodSeconds;
     private DeviceHealthScheduler deviceHealthScheduler;
+    private RoutineTickScheduler routineTickScheduler;
 
     public HttpServerGateway(int port, Executor executor) {
         this(port, executor, new InMemoryBehaviourLogStore());
     }
 
     public HttpServerGateway(int port, Executor executor, InMemoryBehaviourLogStore behaviourLog) {
-        this(port, executor, behaviourLog, defaultDeviceStore(), new NoOpDeviceDiscoveryService(), 0L, null);
+        this(port, executor, behaviourLog, defaultDeviceStore(), new NoOpDeviceDiscoveryService(), 0L, null, 0L);
     }
 
     /**
      * Shares {@link DeviceFixtureStore} and log with other cube subsystems (e.g. {@link wisdom.cube.voice.VoicePipelineFactory}).
      */
     public HttpServerGateway(int port, Executor executor, InMemoryBehaviourLogStore behaviourLog, DeviceFixtureStore deviceStore) {
-        this(port, executor, behaviourLog, deviceStore, new NoOpDeviceDiscoveryService(), 0L, null);
+        this(port, executor, behaviourLog, deviceStore, new NoOpDeviceDiscoveryService(), 0L, null, 0L);
     }
 
     public HttpServerGateway(
@@ -74,7 +78,7 @@ public final class HttpServerGateway implements ApiGateway {
         DeviceFixtureStore deviceStore,
         DeviceDiscoveryService deviceDiscovery
     ) {
-        this(port, executor, behaviourLog, deviceStore, deviceDiscovery, 0L, null);
+        this(port, executor, behaviourLog, deviceStore, deviceDiscovery, 0L, null, 0L);
     }
 
     public HttpServerGateway(
@@ -85,7 +89,7 @@ public final class HttpServerGateway implements ApiGateway {
         DeviceDiscoveryService deviceDiscovery,
         long deviceHealthPeriodSeconds
     ) {
-        this(port, executor, behaviourLog, deviceStore, deviceDiscovery, deviceHealthPeriodSeconds, null);
+        this(port, executor, behaviourLog, deviceStore, deviceDiscovery, deviceHealthPeriodSeconds, null, 0L);
     }
 
     public HttpServerGateway(
@@ -97,6 +101,19 @@ public final class HttpServerGateway implements ApiGateway {
         long deviceHealthPeriodSeconds,
         RoutineCatalog routineCatalog
     ) {
+        this(port, executor, behaviourLog, deviceStore, deviceDiscovery, deviceHealthPeriodSeconds, routineCatalog, 0L);
+    }
+
+    public HttpServerGateway(
+        int port,
+        Executor executor,
+        InMemoryBehaviourLogStore behaviourLog,
+        DeviceFixtureStore deviceStore,
+        DeviceDiscoveryService deviceDiscovery,
+        long deviceHealthPeriodSeconds,
+        RoutineCatalog routineCatalog,
+        long routineTickPeriodSeconds
+    ) {
         this.port = port;
         this.executor = executor != null ? executor : Runnable::run;
         this.behaviourLog = behaviourLog;
@@ -104,6 +121,7 @@ public final class HttpServerGateway implements ApiGateway {
         this.deviceDiscovery = deviceDiscovery != null ? deviceDiscovery : new NoOpDeviceDiscoveryService();
         this.deviceHealthPeriodSeconds = Math.max(0L, deviceHealthPeriodSeconds);
         this.routineCatalog = routineCatalog != null ? routineCatalog : new FixtureRoutineCatalog();
+        this.routineTickPeriodSeconds = Math.max(0L, routineTickPeriodSeconds);
     }
 
     public DeviceFixtureStore deviceStore() {
@@ -159,6 +177,16 @@ public final class HttpServerGateway implements ApiGateway {
                 );
                 deviceHealthScheduler.start();
             }
+            if (routineTickPeriodSeconds > 0L) {
+                routineTickScheduler = new RoutineTickScheduler(
+                    Clock.systemDefaultZone(),
+                    routineCatalog,
+                    deviceStore.registry(),
+                    behaviourLog,
+                    routineTickPeriodSeconds
+                );
+                routineTickScheduler.start();
+            }
         } catch (IOException e) {
             throw new IllegalStateException("Failed to start API gateway on port " + port, e);
         }
@@ -166,6 +194,10 @@ public final class HttpServerGateway implements ApiGateway {
 
     @Override
     public void stop() {
+        if (routineTickScheduler != null) {
+            routineTickScheduler.stop();
+            routineTickScheduler = null;
+        }
         if (deviceHealthScheduler != null) {
             deviceHealthScheduler.stop();
             deviceHealthScheduler = null;

@@ -424,6 +424,24 @@ class HttpServerGatewayTest {
     }
 
     @Test
+    void startStopWithRoutineTickEnabledDoesNotThrow() {
+        InMemoryBehaviourLogStore log = new InMemoryBehaviourLogStore();
+        DeviceFixtureStore ds = new DeviceFixtureStore(new InMemoryLightDeviceRegistry());
+        gateway = new HttpServerGateway(
+            0,
+            Executors.newSingleThreadExecutor(),
+            log,
+            ds,
+            new NoOpDeviceDiscoveryService(),
+            0L,
+            null,
+            600L
+        );
+        gateway.start();
+        gateway.stop();
+    }
+
+    @Test
     void postDevicesDiscoverReturnsCompletePayload() throws Exception {
         gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor());
         gateway.start();
