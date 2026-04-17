@@ -24,6 +24,7 @@ public final class InMemoryBehaviourLogStore implements BehaviourLogWriter {
 
     private final Object lock = new Object();
     private static final int MAX_ROUTINE_RUN_HISTORY = 500;
+    private static final int MAX_INTERNET_CALLS = 500;
 
     private final List<BehaviourLogSchema.ChainSummary> summaries = new ArrayList<>();
     private final List<BehaviourLogSchema.IntentEntry> intents = new ArrayList<>();
@@ -57,6 +58,9 @@ public final class InMemoryBehaviourLogStore implements BehaviourLogWriter {
     public void writeInternetCall(BehaviourLogSchema.InternetCallEntry call) {
         synchronized (lock) {
             internetCalls.add(call);
+            while (internetCalls.size() > MAX_INTERNET_CALLS) {
+                internetCalls.remove(0);
+            }
         }
     }
 
@@ -241,6 +245,43 @@ public final class InMemoryBehaviourLogStore implements BehaviourLogWriter {
             sb.append("]}");
             return sb.toString();
         }
+    }
+
+    /**
+     * JSON for {@code GET /internet-activity}: newest calls first, up to {@code limit} entries
+     * (F5.T3 / transparency; simplified fields for the app list).
+     */
+    public String toInternetActivityJson(int limit) {
+        int cap = Math.max(1, Math.min(limit, MAX_INTERNET_CALLS));
+        List<BehaviourLogSchema.InternetCallEntry> snapshot;
+        synchronized (lock) {
+            snapshot = new ArrayList<>(internetCalls);
+        }
+        snapshot.sort(
+            Comparator.comparing(BehaviourLogSchema.InternetCallEntry::ts)
+                .reversed()
+                .thenComparingInt(BehaviourLogSchema.InternetCallEntry::callIndex)
+                .thenComparing(c -> c.chainId().toString())
+        );
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"events\":[");
+        int n = Math.min(cap, snapshot.size());
+        boolean first = true;
+        for (int i = 0; i < n; i++) {
+            BehaviourLogSchema.InternetCallEntry c = snapshot.get(i);
+            if (!first) {
+                sb.append(',');
+            }
+            first = false;
+            String id = c.chainId() + "-" + c.callIndex();
+            sb.append("{\"id\":\"").append(JsonStrings.escape(id)).append("\",");
+            sb.append("\"at\":\"").append(ISO.format(c.ts())).append("\",");
+            sb.append("\"service_category\":\"").append(JsonStrings.escape(c.serviceCategory())).append("\",");
+            sb.append("\"summary\":\"").append(JsonStrings.escape(c.metadataSummary())).append("\",");
+            sb.append("\"profile_display_name\":\"\"}");
+        }
+        sb.append("]}");
+        return sb.toString();
     }
 
     private static void appendRoutineRunJson(StringBuilder sb, RoutineRunSnapshot r) {

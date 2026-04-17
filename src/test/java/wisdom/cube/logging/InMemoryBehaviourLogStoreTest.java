@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
@@ -83,6 +84,55 @@ class InMemoryBehaviourLogStoreTest {
     void routineRunHistoryEmptyWhenNoRuns() {
         InMemoryBehaviourLogStore store = emptyStore();
         assertEquals("{\"runs\":[]}", store.toRoutineRunHistoryJson(50));
+    }
+
+    @Test
+    void internetActivityJsonEmptyWhenNoCalls() {
+        InMemoryBehaviourLogStore store = emptyStore();
+        assertEquals("{\"events\":[]}", store.toInternetActivityJson(50));
+    }
+
+    @Test
+    void internetActivityJsonNewestFirstAndRespectsLimit() {
+        InMemoryBehaviourLogStore store = emptyStore();
+        UUID c1 = UUID.randomUUID();
+        UUID c2 = UUID.randomUUID();
+        Instant older = Instant.parse("2026-04-10T10:00:00Z");
+        Instant newer = Instant.parse("2026-04-10T11:00:00Z");
+        store.writeInternetCall(new BehaviourLogSchema.InternetCallEntry(
+            c1, 0, older, "cube", "p1", "older-summary", "dns", "x.example", "ok", null, null));
+        store.writeInternetCall(new BehaviourLogSchema.InternetCallEntry(
+            c2, 0, newer, "cube", "p1", "newer-summary", "weather", "y.example", "ok", null, null));
+        String json = store.toInternetActivityJson(1);
+        assertTrue(json.contains("newer-summary"));
+        assertFalse(json.contains("older-summary"));
+        String full = store.toInternetActivityJson(50);
+        assertTrue(full.indexOf("newer-summary") < full.indexOf("older-summary"));
+    }
+
+    @Test
+    void internetCallsEvictOldestWhenOverCap() {
+        InMemoryBehaviourLogStore store = emptyStore();
+        Instant base = Instant.parse("2026-01-01T00:00:00Z");
+        for (int i = 0; i <= 500; i++) {
+            UUID cid = UUID.randomUUID();
+            store.writeInternetCall(new BehaviourLogSchema.InternetCallEntry(
+                cid,
+                0,
+                base.plusSeconds(i),
+                "cube",
+                "p1",
+                "call-" + i,
+                "svc",
+                "ep",
+                "ok",
+                null,
+                null));
+        }
+        String json = store.toInternetActivityJson(10_000);
+        assertFalse(json.contains("call-0"));
+        assertTrue(json.contains("call-500"));
+        assertTrue(json.contains("call-1"));
     }
 
     @Test

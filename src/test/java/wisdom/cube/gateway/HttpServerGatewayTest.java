@@ -5,7 +5,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 
 import org.junit.jupiter.api.AfterEach;
@@ -18,6 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import wisdom.cube.device.InMemoryLightDeviceRegistry;
 import wisdom.cube.device.NoOpDeviceDiscoveryService;
+import wisdom.cube.logging.BehaviourLogSchema;
 import wisdom.cube.logging.InMemoryBehaviourLogStore;
 import wisdom.cube.profile.FixtureProfileStore;
 import wisdom.cube.routine.FixtureRoutineCatalog;
@@ -545,6 +548,50 @@ class HttpServerGatewayTest {
             .build();
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
         assertEquals(405, response.statusCode());
+    }
+
+    @Test
+    void getInternetActivityReturnsLoggedCalls() throws Exception {
+        InMemoryBehaviourLogStore log = new InMemoryBehaviourLogStore();
+        UUID cid = UUID.randomUUID();
+        Instant at = Instant.parse("2026-04-10T12:00:00Z");
+        log.writeInternetCall(new BehaviourLogSchema.InternetCallEntry(
+            cid, 0, at, "cube", "adult-1", "GET /forecast", "weather", "api.example.com", "ok", null, null));
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor(), log);
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest get = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/internet-activity"))
+            .GET()
+            .build();
+        HttpResponse<String> res = client.send(get, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, res.statusCode());
+        assertTrue(res.body().contains("\"events\":["));
+        assertTrue(res.body().contains("weather"));
+        assertTrue(res.body().contains("GET /forecast"));
+    }
+
+    @Test
+    void getInternetActivityLimitReturnsNewestOnly() throws Exception {
+        InMemoryBehaviourLogStore log = new InMemoryBehaviourLogStore();
+        Instant t0 = Instant.parse("2026-04-10T10:00:00Z");
+        Instant t1 = Instant.parse("2026-04-10T11:00:00Z");
+        log.writeInternetCall(new BehaviourLogSchema.InternetCallEntry(
+            UUID.randomUUID(), 0, t0, "cube", "p1", "older", "a", "e1", "ok", null, null));
+        log.writeInternetCall(new BehaviourLogSchema.InternetCallEntry(
+            UUID.randomUUID(), 0, t1, "cube", "p1", "newer", "b", "e2", "ok", null, null));
+        gateway = new HttpServerGateway(0, Executors.newSingleThreadExecutor(), log);
+        gateway.start();
+        int port = gateway.getPort();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest get = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/internet-activity?limit=1"))
+            .GET()
+            .build();
+        String body = client.send(get, HttpResponse.BodyHandlers.ofString()).body();
+        assertTrue(body.contains("newer"));
+        assertFalse(body.contains("older"));
     }
 
     @Test

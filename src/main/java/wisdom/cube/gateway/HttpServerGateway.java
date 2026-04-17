@@ -356,7 +356,8 @@ public final class HttpServerGateway implements ApiGateway {
             sendResponse(exchange, 405, "Method Not Allowed");
             return;
         }
-        sendJson(exchange, 200, "{\"events\":[]}");
+        int limit = parseQueryInt(exchange.getRequestURI().getRawQuery(), "limit", 50, 1, 200);
+        sendJson(exchange, 200, behaviourLog.toInternetActivityJson(limit));
     }
 
     private static String extractChatMessage(String body) {
