@@ -5,19 +5,18 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 import wisdom.cube.device.InMemoryLightDeviceRegistry;
 import wisdom.cube.logging.InMemoryBehaviourLogStore;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 class RoutineTickSchedulerTest {
 
     @Test
     void rejectsNonPositivePeriod() {
-        assertThrows(IllegalArgumentException.class, () ->
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
             new RoutineTickScheduler(
                 Clock.systemUTC(),
                 new FixtureRoutineCatalog(),
@@ -25,6 +24,7 @@ class RoutineTickSchedulerTest {
                 new InMemoryBehaviourLogStore(),
                 0L
             ));
+        assertTrue(ex.getMessage().contains("period"), ex.getMessage());
     }
 
     @Test
